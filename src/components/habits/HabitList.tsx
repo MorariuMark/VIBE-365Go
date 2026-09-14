@@ -6,7 +6,6 @@ import { HabitCard } from './HabitCard';
 import { formatDatePretty, getTodayISO } from '@/lib/utils';
 import {
   Plus,
-  Filter,
   CheckCircle2,
   Calendar,
   Sparkles,
@@ -162,78 +161,77 @@ export const HabitList: React.FC<HabitListProps> = ({
   };
 
   const categories = [
-    { id: 'all', label: 'All Habits' },
+    { id: 'all', label: 'All' },
     { id: 'fitness', label: 'Fitness' },
     { id: 'mindset', label: 'Mindset' },
     { id: 'productivity', label: 'Productivity' },
     { id: 'health', label: 'Health' },
     { id: 'learning', label: 'Learning' },
-    { id: 'custom', label: 'Custom' },
   ];
 
   return (
-    <div className="space-y-4 sm:space-y-5">
-      {/* Date & Completion Header Bar - Mobile friendly wrap */}
-      <div className="bg-slate-900/90 border border-slate-800/90 rounded-2xl p-4 sm:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xl">
+    <div className="space-y-4">
+      {/* Date Header Bar */}
+      <div className="bg-surface-1 border border-surface-border rounded-2xl p-4 sm:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex-shrink-0">
-            <CheckCircle2 className="w-6 h-6" />
+          <div className="p-2 rounded-xl bg-surface-2 border border-surface-border text-emerald-400 flex-shrink-0">
+            <CheckCircle2 className="w-5 h-5" />
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-lg sm:text-xl font-bold text-white">
-                {isToday ? 'Today’s Habits' : formatDatePretty(selectedDate)}
+              <h3 className="text-base sm:text-lg font-semibold text-white tracking-tight">
+                {isToday ? 'Today’s Routine' : formatDatePretty(selectedDate)}
               </h3>
               {!isToday && (
                 <button
                   type="button"
                   onClick={() => onSelectDate(today)}
-                  className="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-emerald-400 border border-slate-700 hover:bg-slate-700 transition"
+                  className="text-[11px] px-2.5 py-0.5 rounded-full bg-surface-2 text-emerald-400 border border-surface-border hover:border-surface-borderHover transition"
                 >
-                  Jump to Today
+                  Return to Today
                 </button>
               )}
             </div>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs text-slate-400 mt-0.5 tabular-nums">
               {completedTodayCount} of {totalCount} completed ({completionPercentage}%)
             </p>
           </div>
         </div>
 
-        {/* Date picker & New Habit trigger */}
-        <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto justify-between md:justify-end">
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700 text-xs text-slate-300 flex-1 sm:flex-initial">
+        {/* Date Selector & Action */}
+        <div className="flex items-center gap-2.5 w-full md:w-auto justify-between md:justify-end">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-surface-2 border border-surface-border text-xs text-slate-300">
             <Calendar className="w-4 h-4 text-slate-400 flex-shrink-0" />
             <input
               type="date"
               value={selectedDate}
               onChange={(e) => onSelectDate(e.target.value)}
-              className="bg-transparent text-slate-200 outline-none cursor-pointer w-full"
+              className="bg-transparent text-slate-200 outline-none cursor-pointer text-xs"
             />
           </div>
 
           <button
             type="button"
             onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition shadow-lg shadow-emerald-500/20 whitespace-nowrap"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition active-press"
           >
-            <Plus className="w-4 h-4 stroke-[2.5]" />
+            <Plus className="w-4 h-4" />
             <span>New Habit</span>
           </button>
         </div>
       </div>
 
-      {/* Category Filter Pills */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin -mx-1 px-1">
+      {/* Category Pills */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
         {categories.map((cat) => (
           <button
             key={cat.id}
             type="button"
             onClick={() => setActiveCategory(cat.id)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all ${
               activeCategory === cat.id
-                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shadow-sm'
-                : 'bg-slate-900/80 text-slate-400 border border-slate-800 hover:text-white hover:border-slate-700'
+                ? 'bg-surface-3 text-white border border-surface-borderHover'
+                : 'bg-surface-1 text-slate-400 border border-surface-border hover:text-white'
             }`}
           >
             {cat.label}
@@ -241,8 +239,8 @@ export const HabitList: React.FC<HabitListProps> = ({
         ))}
       </div>
 
-      {/* Habit Cards Grid / List */}
-      <div className="grid grid-cols-1 gap-3 sm:gap-4">
+      {/* Habit Cards List */}
+      <div className="space-y-3">
         {filteredHabits.length > 0 ? (
           filteredHabits.map((habit) => (
             <HabitCard
@@ -262,15 +260,15 @@ export const HabitList: React.FC<HabitListProps> = ({
             />
           ))
         ) : (
-          <div className="text-center py-12 bg-slate-900/40 border border-slate-800/60 rounded-2xl p-6">
-            <p className="text-slate-400 text-sm">No habits found in this category.</p>
+          <div className="text-center py-12 bg-surface-1 border border-surface-border rounded-2xl p-6">
+            <p className="text-slate-400 text-sm">No habits in this category.</p>
             <button
               type="button"
               onClick={() => setIsModalOpen(true)}
-              className="mt-3 inline-flex items-center gap-1.5 text-xs text-emerald-400 hover:underline"
+              className="mt-2.5 inline-flex items-center gap-1.5 text-xs text-emerald-400 hover:underline"
             >
               <Plus className="w-3.5 h-3.5" />
-              Create your first habit
+              Create a habit
             </button>
           </div>
         )}
@@ -278,8 +276,8 @@ export const HabitList: React.FC<HabitListProps> = ({
 
       {/* New Habit Creation Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-2xl shadow-2xl p-5 sm:p-6 relative my-auto max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-surface-1 border border-surface-border w-full max-w-lg rounded-2xl p-5 sm:p-6 shadow-2xl relative my-auto max-h-[90vh] overflow-y-auto">
             <button
               type="button"
               onClick={() => setIsModalOpen(false)}
@@ -288,65 +286,57 @@ export const HabitList: React.FC<HabitListProps> = ({
               <X className="w-5 h-5" />
             </button>
 
-            <div className="flex items-center gap-2 mb-4">
-              <Sparkles className="w-5 h-5 text-emerald-400" />
-              <h3 className="text-lg font-bold text-white">Create New Habit</h3>
-            </div>
+            <h3 className="text-base font-semibold text-white mb-4">Create New Habit</h3>
 
             <form onSubmit={handleCreateSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  Habit Title *
-                </label>
+                <label className="block text-xs font-medium text-slate-400 mb-1">Habit Title *</label>
                 <input
                   type="text"
                   required
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="e.g. Daily Writing Sprint, Read 20 Pages, Morning Mobility"
-                  className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white placeholder:text-slate-500 text-sm focus:outline-none focus:border-emerald-500"
+                  placeholder="e.g. Morning Mobility, Reading, Deep Work"
+                  className="w-full px-3 py-2 rounded-xl bg-surface-2 border border-surface-border text-white text-sm focus:border-emerald-500"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  Description (Optional)
-                </label>
+                <label className="block text-xs font-medium text-slate-400 mb-1">Description (Optional)</label>
                 <input
                   type="text"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="e.g. Daily creative output: track active minutes and total words"
-                  className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white placeholder:text-slate-500 text-sm focus:outline-none focus:border-emerald-500"
+                  placeholder="Short purpose or context..."
+                  className="w-full px-3 py-2 rounded-xl bg-surface-2 border border-surface-border text-white text-sm focus:border-emerald-500"
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">Category</label>
+                  <label className="block text-xs font-medium text-slate-400 mb-1">Category</label>
                   <select
                     value={category}
-                    onChange={(e) => setCategory(e.target.value as Habit['category'])}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:border-emerald-500"
+                    onChange={(e) => setCategory(e.target.value as any)}
+                    className="w-full px-3 py-2 rounded-xl bg-surface-2 border border-surface-border text-white text-sm focus:border-emerald-500"
                   >
                     <option value="fitness">Fitness</option>
                     <option value="mindset">Mindset</option>
                     <option value="productivity">Productivity</option>
                     <option value="health">Health</option>
                     <option value="learning">Learning</option>
-                    <option value="custom">Custom</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">Badge Color</label>
-                  <div className="flex items-center gap-2 pt-1">
-                    {['#10b981', '#06b6d4', '#8b5cf6', '#f59e0b', '#f43f5e', '#3b82f6'].map((c) => (
+                  <label className="block text-xs font-medium text-slate-400 mb-1">Color Marker</label>
+                  <div className="flex items-center gap-2 pt-1.5">
+                    {['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#f43f5e'].map((c) => (
                       <button
                         key={c}
                         type="button"
                         onClick={() => setColor(c)}
-                        className={`w-6 h-6 rounded-full transition-transform ${
+                        className={`w-5 h-5 rounded-full transition-transform ${
                           color === c ? 'scale-125 ring-2 ring-white' : 'opacity-70 hover:opacity-100'
                         }`}
                         style={{ backgroundColor: c }}
@@ -356,22 +346,19 @@ export const HabitList: React.FC<HabitListProps> = ({
                 </div>
               </div>
 
-              {/* Minimum Completions Target (Week / Month) */}
-              <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2">
-                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-300">
-                  <Target className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Minimum Target Completions</span>
-                </div>
+              {/* Target Completions */}
+              <div className="p-3 rounded-xl bg-surface-2 border border-surface-border space-y-2">
+                <span className="text-xs font-medium text-slate-300 block">Frequency Target</span>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="block text-[10px] text-slate-400 mb-0.5">Min Count</label>
+                    <label className="block text-[10px] text-slate-400 mb-0.5">Min Times</label>
                     <input
                       type="number"
                       min="1"
                       max={targetPeriod === 'week' ? 7 : 31}
                       value={targetCount}
                       onChange={(e) => setTargetCount(parseInt(e.target.value, 10) || 1)}
-                      className="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs text-white"
+                      className="w-full px-2.5 py-1.5 rounded-lg bg-surface-1 border border-surface-border text-xs text-white"
                     />
                   </div>
                   <div>
@@ -379,7 +366,7 @@ export const HabitList: React.FC<HabitListProps> = ({
                     <select
                       value={targetPeriod}
                       onChange={(e) => setTargetPeriod(e.target.value as any)}
-                      className="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs text-white"
+                      className="w-full px-2.5 py-1.5 rounded-lg bg-surface-1 border border-surface-border text-xs text-white"
                     >
                       <option value="week">Per Week</option>
                       <option value="month">Per Month</option>
@@ -388,17 +375,14 @@ export const HabitList: React.FC<HabitListProps> = ({
                 </div>
               </div>
 
-              {/* Sub-Set Metric Variables (minutes, words, numbers, bool) */}
-              <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2">
+              {/* Sub-Set Metrics */}
+              <div className="p-3 rounded-xl bg-surface-2 border border-surface-border space-y-2">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-slate-300">
-                    <Sliders className="w-3.5 h-3.5 text-cyan-400" />
-                    <span>Sub-Set Variables (e.g. Minutes, Words)</span>
-                  </div>
+                  <span className="text-xs font-medium text-slate-300">Sub-Set Variables</span>
                   <button
                     type="button"
                     onClick={handleAddMetricField}
-                    className="text-[11px] text-cyan-400 hover:underline flex items-center gap-1"
+                    className="text-[11px] text-blue-400 hover:underline flex items-center gap-1"
                   >
                     <Plus className="w-3 h-3" />
                     <span>Add Variable</span>
@@ -407,18 +391,18 @@ export const HabitList: React.FC<HabitListProps> = ({
 
                 <div className="space-y-2">
                   {metricsInput.map((m, idx) => (
-                    <div key={`m-in-${idx}`} className="flex items-center gap-2">
+                    <div key={`m-field-${idx}`} className="flex items-center gap-2">
                       <input
                         type="text"
                         value={m.label}
                         onChange={(e) => handleMetricChange(idx, 'label', e.target.value)}
                         placeholder="Label (e.g. Minutes, Words)"
-                        className="flex-1 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs text-white"
+                        className="flex-1 px-2.5 py-1.5 rounded-lg bg-surface-1 border border-surface-border text-xs text-white"
                       />
                       <select
                         value={m.type}
                         onChange={(e) => handleMetricChange(idx, 'type', e.target.value)}
-                        className="w-24 px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs text-white"
+                        className="w-24 px-2 py-1.5 rounded-lg bg-surface-1 border border-surface-border text-xs text-white"
                       >
                         <option value="number">Number</option>
                         <option value="text">Text</option>
@@ -428,14 +412,14 @@ export const HabitList: React.FC<HabitListProps> = ({
                         type="text"
                         value={m.unit}
                         onChange={(e) => handleMetricChange(idx, 'unit', e.target.value)}
-                        placeholder="unit (min)"
-                        className="w-16 px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs text-white"
+                        placeholder="unit"
+                        className="w-16 px-2 py-1.5 rounded-lg bg-surface-1 border border-surface-border text-xs text-white"
                       />
                       {metricsInput.length > 1 && (
                         <button
                           type="button"
                           onClick={() => handleRemoveMetricField(idx)}
-                          className="text-slate-500 hover:text-rose-400 p-1"
+                          className="text-slate-400 hover:text-rose-400 p-1"
                         >
                           <X className="w-3.5 h-3.5" />
                         </button>
@@ -445,12 +429,10 @@ export const HabitList: React.FC<HabitListProps> = ({
                 </div>
               </div>
 
-              {/* Subtasks checklist builder */}
-              <div className="pt-2 border-t border-slate-800">
+              {/* Subtasks */}
+              <div className="pt-2 border-t border-surface-border">
                 <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-semibold text-slate-300">
-                    Checklist Steps (Optional)
-                  </label>
+                  <label className="text-xs font-medium text-slate-400">Steps Checklist</label>
                   <button
                     type="button"
                     onClick={handleAddSubtaskField}
@@ -461,23 +443,23 @@ export const HabitList: React.FC<HabitListProps> = ({
                   </button>
                 </div>
 
-                <div className="space-y-2 max-h-32 overflow-y-auto">
+                <div className="space-y-1.5 max-h-32 overflow-y-auto">
                   {subtasksInput.map((sub, idx) => (
-                    <div key={`sub-input-${idx}`} className="flex items-center gap-2">
+                    <div key={`sub-in-${idx}`} className="flex items-center gap-2">
                       <input
                         type="text"
                         value={sub}
                         onChange={(e) => handleSubtaskChange(idx, e.target.value)}
                         placeholder={`Step ${idx + 1}`}
-                        className="flex-1 px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-white placeholder:text-slate-500 text-xs focus:outline-none focus:border-emerald-500"
+                        className="flex-1 px-3 py-1.5 rounded-lg bg-surface-2 border border-surface-border text-white text-xs"
                       />
                       {subtasksInput.length > 1 && (
                         <button
                           type="button"
                           onClick={() => handleRemoveSubtaskField(idx)}
-                          className="text-slate-500 hover:text-rose-400 p-1"
+                          className="text-slate-400 hover:text-rose-400 p-1"
                         >
-                          <X className="w-4 h-4" />
+                          <X className="w-3.5 h-3.5" />
                         </button>
                       )}
                     </div>
@@ -485,18 +467,18 @@ export const HabitList: React.FC<HabitListProps> = ({
                 </div>
               </div>
 
-              {/* Form buttons */}
-              <div className="flex items-center justify-end gap-3 pt-3">
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-2.5 pt-3">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-medium hover:bg-slate-700 transition"
+                  className="px-4 py-2 rounded-xl bg-surface-2 text-slate-300 text-xs font-medium hover:text-white"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold transition shadow-lg shadow-emerald-500/20"
+                  className="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold transition active-press"
                 >
                   Create Habit
                 </button>

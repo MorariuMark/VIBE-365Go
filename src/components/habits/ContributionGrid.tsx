@@ -2,8 +2,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { Habit, WorkoutDayLog } from '@/types';
-import { formatDatePretty } from '@/lib/utils';
-import { Flame, Trophy, Calendar, CheckCircle2, Dumbbell, ChevronRight } from 'lucide-react';
+import { Calendar, CheckCircle2, Dumbbell, Flame, TrendingUp } from 'lucide-react';
 
 interface ContributionGridProps {
   habits?: Habit[];
@@ -38,16 +37,16 @@ export const ContributionGrid: React.FC<ContributionGridProps> = ({
     y: number;
   } | null>(null);
 
-  // Generate 28 weeks of history
+  // 26 weeks for optimal density on all viewports
   const { weeks, monthHeaders, stats } = useMemo(() => {
     const today = new Date();
     today.setHours(23, 59, 59, 999);
 
-    const totalDays = 28 * 7;
+    const totalDays = 26 * 7;
     const startDate = new Date(today);
     startDate.setDate(today.getDate() - totalDays + 1);
 
-    // Align start date to Monday
+    // Monday as start of week
     const startDay = startDate.getDay();
     const diffToMonday = startDay === 0 ? -6 : 1 - startDay;
     startDate.setDate(startDate.getDate() + diffToMonday);
@@ -102,7 +101,6 @@ export const ContributionGrid: React.FC<ContributionGridProps> = ({
       let level = 0;
 
       if (mode === 'gym') {
-        // Gym-focused calculation
         if (hasWorkout) {
           activeDaysCount++;
           const exerciseCount = workout?.exercises?.length || 0;
@@ -112,7 +110,6 @@ export const ContributionGrid: React.FC<ContributionGridProps> = ({
           else level = 1;
         }
       } else {
-        // Habits-focused calculation
         rate = totalHabits > 0 ? completedCount / totalHabits : 0;
         if (rate > 0 && rate <= 0.25) level = 1;
         else if (rate > 0.25 && rate <= 0.5) level = 2;
@@ -142,7 +139,6 @@ export const ContributionGrid: React.FC<ContributionGridProps> = ({
       colCounter++;
     }
 
-    // Group into weeks (columns of 7 days)
     const groupedWeeks: (typeof dayCells)[] = [];
     let currentWeek: typeof dayCells = [];
 
@@ -163,105 +159,90 @@ export const ContributionGrid: React.FC<ContributionGridProps> = ({
       stats: {
         activeDays: activeDaysCount,
         consistencyPercent,
-        totalDaysEvaluated: dayCells.length,
       },
     };
   }, [habits, workoutLogs, mode]);
 
-  // Dynamic Color Palette for Emerald vs Blue theme
-  const getColorClass = (level: number, hasWorkout: boolean) => {
+  // Clean, high-contrast palette
+  const getCellColor = (level: number, hasWorkout: boolean) => {
     if (colorTheme === 'blue') {
-      if (level === 4) return 'bg-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.8)] border border-cyan-300';
-      if (level === 3) return 'bg-sky-500 shadow-sm';
-      if (level === 2) return 'bg-blue-600';
-      if (level === 1) return 'bg-blue-900 border border-blue-800/60';
-      return 'bg-slate-800/70 border border-slate-700/30';
+      if (level === 4) return 'bg-blue-500 border border-blue-400 text-slate-950';
+      if (level === 3) return 'bg-blue-600 border border-blue-500 text-white';
+      if (level === 2) return 'bg-blue-800 border border-blue-700 text-white';
+      if (level === 1) return 'bg-blue-950/80 border border-blue-900 text-blue-300';
+      return 'bg-surface-2 border border-surface-border';
     }
 
-    // Emerald theme (Habits)
-    if (level === 4) return 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)] border border-emerald-300';
-    if (level === 3) return 'bg-emerald-500 shadow-sm';
-    if (level === 2) return 'bg-emerald-700';
-    if (level === 1) return 'bg-emerald-950 border border-emerald-800/40';
-    if (hasWorkout) return 'bg-cyan-600/80 shadow-[0_0_6px_rgba(6,182,212,0.5)]';
-    return 'bg-slate-800/70 border border-slate-700/30';
+    // Emerald theme
+    if (level === 4) return 'bg-emerald-500 border border-emerald-400 text-slate-950';
+    if (level === 3) return 'bg-emerald-600 border border-emerald-500 text-white';
+    if (level === 2) return 'bg-emerald-800 border border-emerald-700 text-white';
+    if (level === 1) return 'bg-emerald-950/80 border border-emerald-900 text-emerald-300';
+    if (hasWorkout) return 'bg-blue-600/70 border border-blue-500 text-white';
+    return 'bg-surface-2 border border-surface-border';
   };
 
-  const dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
-  const defaultTitle =
-    mode === 'gym' ? 'Fitness Activity Matrix' : 'Consistency Matrix & Activity';
-  const defaultSubtitle =
-    mode === 'gym'
-      ? 'Weekly workout volume, split distribution & training consistency'
-      : 'Daily habit completions and routine consistency grid';
-
-  const accentText = colorTheme === 'blue' ? 'text-cyan-400' : 'text-emerald-400';
-  const accentBorder = colorTheme === 'blue' ? 'border-cyan-500/30' : 'border-emerald-500/30';
-  const accentBg = colorTheme === 'blue' ? 'bg-cyan-500/10' : 'bg-emerald-500/10';
+  const dayLabels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
   return (
-    <div className="bg-slate-900/90 border border-slate-800/90 rounded-2xl p-4 sm:p-5 shadow-xl backdrop-blur-md">
-      {/* Top Header & Metrics */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 mb-4 sm:mb-5">
+    <div className="bg-surface-1 border border-surface-border rounded-2xl p-4 sm:p-6 transition-colors">
+      {/* Top Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
         <div>
           <div className="flex items-center gap-2">
             {mode === 'gym' ? (
-              <Dumbbell className={`w-5 h-5 ${accentText}`} />
+              <Dumbbell className="w-4 h-4 text-blue-400" />
             ) : (
-              <Calendar className={`w-5 h-5 ${accentText}`} />
+              <Calendar className="w-4 h-4 text-emerald-400" />
             )}
-            <h3 className="text-base sm:text-lg font-bold text-white tracking-wide">
-              {title || defaultTitle}
+            <h3 className="text-base font-semibold text-white tracking-tight">
+              {title || (mode === 'gym' ? 'Training Consistency' : 'Habit Consistency')}
             </h3>
           </div>
           <p className="text-xs text-slate-400 mt-0.5">
-            {subtitle || defaultSubtitle}
+            {subtitle || (mode === 'gym' ? 'Workout frequency and session volume distribution' : 'Daily completion rate over the past 26 weeks')}
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800/70 border border-slate-700/50 text-xs">
+        {/* Key Metrics */}
+        <div className="flex items-center gap-2.5 sm:gap-3">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-surface-2 border border-surface-border text-xs tabular-nums">
             <Flame className="w-3.5 h-3.5 text-amber-400" />
             <span className="text-slate-400">
-              {mode === 'gym' ? 'Workouts: ' : 'Active Days: '}
-              <strong className="text-white">{stats.activeDays}</strong>
+              Active: <strong className="text-white font-semibold">{stats.activeDays}</strong>
             </span>
           </div>
 
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800/70 border border-slate-700/50 text-xs">
-            <Trophy className={`w-3.5 h-3.5 ${accentText}`} />
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-surface-2 border border-surface-border text-xs tabular-nums">
+            <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
             <span className="text-slate-400">
-              Score: <strong className={accentText}>{stats.consistencyPercent}%</strong>
+              Rate: <strong className="text-white font-semibold">{stats.consistencyPercent}%</strong>
             </span>
           </div>
         </div>
       </div>
 
-      {/* Grid Container with responsive horizontal scroll */}
-      <div className="overflow-x-auto pb-2 -mx-1 px-1 scrollbar-thin">
+      {/* Grid Canvas with Horizontal Scroll */}
+      <div className="overflow-x-auto pb-2 scrollbar-thin -mx-1 px-1">
         <div className="inline-block min-w-full">
-          {/* Month Labels Bar */}
-          <div className="flex mb-1.5 pl-8 sm:pl-9 text-[10px] sm:text-[11px] font-bold text-slate-400 tracking-wider">
+          {/* Month Header Track */}
+          <div className="flex mb-1.5 pl-6 text-[10px] font-medium text-slate-400 tracking-tight">
             {weeks.map((_, wIdx) => {
               const header = monthHeaders.find((h) => h.colIndex === wIdx);
               return (
-                <div
-                  key={`month-${wIdx}`}
-                  className="w-4 sm:w-4.5 mr-1 text-left whitespace-nowrap overflow-visible"
-                >
+                <div key={`m-${wIdx}`} className="w-3.5 sm:w-4 mr-1 text-left whitespace-nowrap overflow-visible">
                   {header ? header.label : ''}
                 </div>
               );
             })}
           </div>
 
-          {/* Days Grid Rows */}
+          {/* Days Grid */}
           <div className="flex gap-1 sm:gap-1.5">
-            {/* Day of week labels */}
-            <div className="flex flex-col gap-1 sm:gap-1.5 pr-1.5 sm:pr-2 pt-0.5 text-[9px] sm:text-[10px] text-slate-400 font-semibold select-none">
+            {/* Weekday labels */}
+            <div className="flex flex-col gap-1 sm:gap-1.5 pr-1.5 text-[9px] text-slate-400 font-semibold select-none">
               {dayLabels.map((lbl, i) => (
-                <div key={lbl} className="h-3.5 sm:h-4 leading-3.5 sm:leading-4 flex items-center justify-end w-6">
+                <div key={`${lbl}-${i}`} className="h-3.5 sm:h-4 leading-3.5 sm:leading-4 flex items-center justify-end w-4">
                   {i % 2 === 0 ? lbl : ''}
                 </div>
               ))}
@@ -270,7 +251,7 @@ export const ContributionGrid: React.FC<ContributionGridProps> = ({
             {/* Weeks Columns */}
             <div className="flex gap-1 sm:gap-1.5">
               {weeks.map((week, wIdx) => (
-                <div key={`col-${wIdx}`} className="flex flex-col gap-1 sm:gap-1.5">
+                <div key={`wk-${wIdx}`} className="flex flex-col gap-1 sm:gap-1.5">
                   {week.map((day) => (
                     <button
                       key={day.date}
@@ -294,13 +275,12 @@ export const ContributionGrid: React.FC<ContributionGridProps> = ({
                         });
                       }}
                       onMouseLeave={() => setHoveredDay(null)}
-                      className={`w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-[3px] contrib-box cursor-pointer relative group flex items-center justify-center text-[7px] font-mono text-white/50 ${getColorClass(
+                      className={`w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-[3px] contrib-cell cursor-pointer relative flex items-center justify-center text-[7px] font-mono select-none ${getCellColor(
                         day.level,
                         day.hasWorkout
                       )}`}
                     >
-                      {/* Day number visible subtly on desktop */}
-                      <span className="hidden sm:inline-block select-none opacity-0 group-hover:opacity-100 text-[8px] font-bold text-slate-900">
+                      <span className="opacity-0 hover:opacity-100 font-bold pointer-events-none hidden sm:inline">
                         {day.dayNum}
                       </span>
                     </button>
@@ -312,56 +292,56 @@ export const ContributionGrid: React.FC<ContributionGridProps> = ({
         </div>
       </div>
 
-      {/* Legend & Details Footer */}
-      <div className="mt-3 sm:mt-4 pt-3 border-t border-slate-800/60 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-400 gap-2">
-        <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
-          <span>Click any cell to inspect details</span>
+      {/* Grid Legend & Interactive Cue */}
+      <div className="mt-4 pt-3.5 border-t border-surface-border flex flex-col sm:flex-row items-start sm:items-center justify-between text-xs text-slate-400 gap-2">
+        <div className="flex items-center gap-2 text-[11px]">
+          <span>Tap any day to view or edit logs</span>
           {mode === 'gym' ? (
-            <span className="inline-flex items-center gap-1.5 text-cyan-400 font-medium">
-              <span className="w-2 h-2 rounded-full bg-cyan-400" />
-              Blue Intensity = Workout Volume
+            <span className="inline-flex items-center gap-1.5 text-blue-400 font-medium">
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+              Volume Scale
             </span>
           ) : (
             <span className="inline-flex items-center gap-1.5 text-emerald-400 font-medium">
-              <span className="w-2 h-2 rounded-full bg-emerald-400" />
-              Green = Habit Consistency
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              Completion Scale
             </span>
           )}
         </div>
 
-        <div className="flex items-center gap-1.5 text-[11px]">
-          <span className="text-slate-500 mr-1">Less</span>
-          <div className="w-3 h-3 rounded-[2px] bg-slate-800/80 border border-slate-700/40" />
+        <div className="flex items-center gap-1 text-[11px] self-end sm:self-auto">
+          <span className="text-slate-400 mr-1">Less</span>
+          <div className="w-3 h-3 rounded-[2px] bg-surface-2 border border-surface-border" />
           {colorTheme === 'blue' ? (
             <>
-              <div className="w-3 h-3 rounded-[2px] bg-blue-950" />
-              <div className="w-3 h-3 rounded-[2px] bg-blue-700" />
-              <div className="w-3 h-3 rounded-[2px] bg-sky-500" />
-              <div className="w-3 h-3 rounded-[2px] bg-cyan-400 shadow-[0_0_6px_rgba(6,182,212,0.8)]" />
+              <div className="w-3 h-3 rounded-[2px] bg-blue-950/80 border border-blue-900" />
+              <div className="w-3 h-3 rounded-[2px] bg-blue-800 border border-blue-700" />
+              <div className="w-3 h-3 rounded-[2px] bg-blue-600 border border-blue-500" />
+              <div className="w-3 h-3 rounded-[2px] bg-blue-500 border border-blue-400" />
             </>
           ) : (
             <>
-              <div className="w-3 h-3 rounded-[2px] bg-emerald-950" />
-              <div className="w-3 h-3 rounded-[2px] bg-emerald-700" />
-              <div className="w-3 h-3 rounded-[2px] bg-emerald-500" />
-              <div className="w-3 h-3 rounded-[2px] bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]" />
+              <div className="w-3 h-3 rounded-[2px] bg-emerald-950/80 border border-emerald-900" />
+              <div className="w-3 h-3 rounded-[2px] bg-emerald-800 border border-emerald-700" />
+              <div className="w-3 h-3 rounded-[2px] bg-emerald-600 border border-emerald-500" />
+              <div className="w-3 h-3 rounded-[2px] bg-emerald-500 border border-emerald-400" />
             </>
           )}
-          <span className="text-slate-500 ml-1">More</span>
+          <span className="text-slate-400 ml-1">More</span>
         </div>
       </div>
 
-      {/* Rich Hover Tooltip with Day of Week and Day of Month */}
+      {/* Floating Precision Tooltip */}
       {hoveredDay && (
         <div
-          className="fixed z-50 pointer-events-none transform -translate-x-1/2 -translate-y-full -mt-3 px-3.5 py-2.5 bg-slate-950/95 border border-slate-700 text-xs rounded-xl shadow-2xl backdrop-blur-md min-w-[200px]"
+          className="fixed z-50 pointer-events-none transform -translate-x-1/2 -translate-y-full -mt-2.5 px-3 py-2 bg-surface-1/95 border border-surface-border text-xs rounded-xl shadow-xl backdrop-blur-md min-w-[190px]"
           style={{ left: `${hoveredDay.x}px`, top: `${hoveredDay.y}px` }}
         >
-          <div className="flex items-center justify-between border-b border-slate-800 pb-1 mb-1.5">
-            <span className="font-bold text-white">
+          <div className="flex items-center justify-between border-b border-surface-border pb-1 mb-1.5 font-medium">
+            <span className="text-white">
               {hoveredDay.dayOfWeek}, {hoveredDay.monthName} {hoveredDay.dayNum}
             </span>
-            <span className="text-[10px] font-mono text-slate-400 bg-slate-900 px-1.5 py-0.5 rounded">
+            <span className="text-[10px] text-slate-400 tabular-nums">
               Day {hoveredDay.dayNum}
             </span>
           </div>
@@ -369,32 +349,32 @@ export const ContributionGrid: React.FC<ContributionGridProps> = ({
           {mode === 'gym' ? (
             <div>
               {hoveredDay.hasWorkout ? (
-                <div className="space-y-1">
-                  <div className="text-cyan-400 font-bold flex items-center gap-1.5">
-                    <Dumbbell className="w-3.5 h-3.5" />
-                    <span>{hoveredDay.workoutTitle || 'Session Logged'}</span>
+                <div className="space-y-0.5">
+                  <div className="text-blue-400 font-semibold flex items-center gap-1.5">
+                    <Dumbbell className="w-3 h-3" />
+                    <span className="truncate">{hoveredDay.workoutTitle || 'Session Logged'}</span>
                   </div>
                   {hoveredDay.workoutSplit && (
-                    <div className="text-[11px] text-slate-400">
-                      Split: <span className="uppercase font-semibold text-slate-200">{hoveredDay.workoutSplit}</span>
+                    <div className="text-[10px] text-slate-400 capitalize">
+                      Split: {hoveredDay.workoutSplit}
                     </div>
                   )}
                 </div>
               ) : (
-                <div className="text-slate-500 italic text-[11px]">Rest / No training logged</div>
+                <div className="text-slate-400 text-[11px]">Rest day</div>
               )}
             </div>
           ) : (
             <div>
               <div className="flex items-center gap-1.5 text-emerald-400 font-medium">
-                <CheckCircle2 className="w-3.5 h-3.5" />
+                <CheckCircle2 className="w-3 h-3" />
                 <span>
-                  {hoveredDay.completedCount} of {hoveredDay.totalHabits} habits completed
+                  {hoveredDay.completedCount} of {hoveredDay.totalHabits} completed
                 </span>
               </div>
               {hoveredDay.hasWorkout && (
-                <div className="text-cyan-400 font-semibold text-[11px] mt-1 flex items-center gap-1">
-                  <Dumbbell className="w-3 h-3" />
+                <div className="text-blue-400 text-[10px] mt-1 flex items-center gap-1">
+                  <Dumbbell className="w-2.5 h-2.5" />
                   <span>{hoveredDay.workoutTitle || 'Workout Logged'}</span>
                 </div>
               )}

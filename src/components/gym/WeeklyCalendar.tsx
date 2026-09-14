@@ -4,7 +4,6 @@ import React, { useState } from 'react';
 import { WorkoutDayLog, UserGymProfile } from '@/types';
 import { getWeekDays, toDateISO, getTodayISO } from '@/lib/utils';
 import {
-  Calendar as CalendarIcon,
   ChevronLeft,
   ChevronRight,
   Dumbbell,
@@ -32,7 +31,6 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
   onOpenDayWorkout,
   onUpdateGymProfile,
 }) => {
-  // Current week reference date
   const [weekReference, setWeekReference] = useState<Date>(new Date());
   const [isEditingGoal, setIsEditingGoal] = useState(false);
   const [tempGoal, setTempGoal] = useState(gymProfile.workoutsPerWeekGoal);
@@ -40,7 +38,6 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
   const daysOfWeek = getWeekDays(weekReference);
   const todayISO = getTodayISO();
 
-  // Navigation handlers
   const handlePrevWeek = () => {
     const prev = new Date(weekReference);
     prev.setDate(prev.getDate() - 7);
@@ -57,7 +54,6 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
     setWeekReference(new Date());
   };
 
-  // Compute workouts completed this week
   const weekDayISOs = daysOfWeek.map((d) => toDateISO(d));
   const workoutsCompletedThisWeek = weekDayISOs.filter(
     (iso) => workoutLogs[iso] && workoutLogs[iso].completed && workoutLogs[iso].splitType !== 'rest'
@@ -66,89 +62,88 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
   const targetGoal = gymProfile.workoutsPerWeekGoal || 4;
   const goalPercent = Math.min(Math.round((workoutsCompletedThisWeek / targetGoal) * 100), 100);
 
-  const splitColors: Record<string, { bg: string; text: string; border: string }> = {
-    push: { bg: 'bg-amber-500/10', text: 'text-amber-400', border: 'border-amber-500/30' },
-    pull: { bg: 'bg-cyan-500/10', text: 'text-cyan-400', border: 'border-cyan-500/30' },
-    legs: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', border: 'border-emerald-500/30' },
-    rest: { bg: 'bg-slate-800/60', text: 'text-slate-400', border: 'border-slate-700/40' },
-    custom: { bg: 'bg-purple-500/10', text: 'text-purple-400', border: 'border-purple-500/30' },
+  // Intentional, matte split badges
+  const splitStyles: Record<string, { bg: string; text: string; border: string }> = {
+    push: { bg: 'bg-amber-500/10', text: 'text-amber-400', border: 'border-amber-500/20' },
+    pull: { bg: 'bg-blue-500/10', text: 'text-blue-400', border: 'border-blue-500/20' },
+    legs: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', border: 'border-emerald-500/20' },
+    rest: { bg: 'bg-surface-2', text: 'text-slate-400', border: 'border-surface-border' },
+    custom: { bg: 'bg-indigo-500/10', text: 'text-indigo-400', border: 'border-indigo-500/20' },
   };
 
   const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3.5 sm:space-y-4">
       {/* Calendar Header & Weekly Goal */}
-      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="bg-surface-1 border border-surface-border rounded-2xl p-4 sm:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <Dumbbell className="w-5 h-5 text-cyan-400" />
-            <h3 className="text-lg font-bold text-white tracking-wide">
-              Weekly Workout Schedule
+            <Dumbbell className="w-4 h-4 text-blue-400" />
+            <h3 className="text-base font-semibold text-white tracking-tight">
+              Weekly Training Schedule
             </h3>
           </div>
           <p className="text-xs text-slate-400 mt-0.5">
-            Week of {daysOfWeek[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} –{' '}
+            {daysOfWeek[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} –{' '}
             {daysOfWeek[6].toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
           </p>
         </div>
 
         {/* Goal Indicator & Navigation */}
-        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-between md:justify-end">
+        <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto justify-between md:justify-end">
           {/* Workouts / Week Goal Box */}
-          <div className="flex items-center gap-2.5 px-3.5 py-2 rounded-xl bg-slate-800/70 border border-slate-700/60">
-            <Trophy className="w-4 h-4 text-amber-400" />
-            <div className="text-xs">
-              <span className="text-slate-400">Weekly Goal: </span>
-              {isEditingGoal ? (
-                <span className="inline-flex items-center gap-1">
-                  <input
-                    type="number"
-                    min="1"
-                    max="7"
-                    value={tempGoal}
-                    onChange={(e) => setTempGoal(Number(e.target.value))}
-                    className="w-10 px-1 py-0.5 rounded bg-slate-950 text-white font-bold text-xs border border-slate-600 outline-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onUpdateGymProfile({ workoutsPerWeekGoal: tempGoal });
-                      setIsEditingGoal(false);
-                    }}
-                    className="text-[10px] text-emerald-400 font-bold hover:underline"
-                  >
-                    Save
-                  </button>
-                </span>
-              ) : (
-                <span
-                  onClick={() => setIsEditingGoal(true)}
-                  className="font-bold text-white cursor-pointer hover:underline"
-                  title="Click to change goal"
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-surface-2 border border-surface-border text-xs tabular-nums">
+            <Trophy className="w-3.5 h-3.5 text-amber-400" />
+            <span className="text-slate-400">Target:</span>
+            {isEditingGoal ? (
+              <span className="inline-flex items-center gap-1">
+                <input
+                  type="number"
+                  min="1"
+                  max="7"
+                  value={tempGoal}
+                  onChange={(e) => setTempGoal(Number(e.target.value))}
+                  className="w-10 px-1 py-0.5 rounded bg-surface-1 text-white font-semibold text-xs border border-surface-border"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    onUpdateGymProfile({ workoutsPerWeekGoal: tempGoal });
+                    setIsEditingGoal(false);
+                  }}
+                  className="text-[11px] text-emerald-400 font-semibold hover:underline"
                 >
-                  {workoutsCompletedThisWeek} / {targetGoal} Days ({goalPercent}%)
-                </span>
-              )}
-            </div>
+                  Save
+                </button>
+              </span>
+            ) : (
+              <span
+                onClick={() => setIsEditingGoal(true)}
+                className="font-semibold text-white cursor-pointer hover:underline"
+                title="Edit weekly target"
+              >
+                {workoutsCompletedThisWeek} / {targetGoal} Days ({goalPercent}%)
+              </span>
+            )}
             {!isEditingGoal && (
               <button
                 type="button"
                 onClick={() => setIsEditingGoal(true)}
-                className="text-slate-500 hover:text-white"
-                title="Edit weekly goal"
+                className="text-slate-400 hover:text-white"
+                title="Edit goal"
               >
-                <Settings className="w-3.5 h-3.5" />
+                <Settings className="w-3 h-3" />
               </button>
             )}
           </div>
 
           {/* Week Nav controls */}
-          <div className="flex items-center gap-1 bg-slate-800/70 border border-slate-700/60 rounded-xl p-1">
+          <div className="flex items-center gap-1 bg-surface-2 border border-surface-border rounded-xl p-1">
             <button
               type="button"
               onClick={handlePrevWeek}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700/50 transition"
+              className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-surface-3 transition"
               title="Previous Week"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -156,14 +151,14 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
             <button
               type="button"
               onClick={handleCurrentWeek}
-              className="px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-700/50 transition"
+              className="px-2 py-0.5 rounded-lg text-xs font-medium text-slate-300 hover:text-white transition"
             >
-              Current Week
+              Current
             </button>
             <button
               type="button"
               onClick={handleNextWeek}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700/50 transition"
+              className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-surface-3 transition"
               title="Next Week"
             >
               <ChevronRight className="w-4 h-4" />
@@ -172,15 +167,15 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
         </div>
       </div>
 
-      {/* 7-Day Week Calendar Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2.5 sm:gap-3">
+      {/* 7-Day Week Calendar Cards - Clean 2-col on phone, 7-col on desktop */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2 sm:gap-3">
         {daysOfWeek.map((dayDate, idx) => {
           const dateISO = toDateISO(dayDate);
           const workout = workoutLogs[dateISO];
           const isToday = dateISO === todayISO;
           const isSelected = dateISO === selectedDate;
           const split = workout?.splitType || 'rest';
-          const splitStyle = splitColors[split] || splitColors.rest;
+          const splitStyle = splitStyles[split] || splitStyles.rest;
           const hasWorkout = Boolean(workout && workout.exercises && workout.exercises.length > 0);
 
           return (
@@ -190,35 +185,35 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
                 onSelectDate(dateISO);
                 onOpenDayWorkout(dateISO);
               }}
-              className={`p-3 sm:p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between min-h-[140px] sm:min-h-[160px] group ${
+              className={`p-3 sm:p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between min-h-[135px] sm:min-h-[155px] group active-press ${
                 isSelected
-                  ? 'bg-slate-800/95 border-cyan-500 ring-2 ring-cyan-500/20 shadow-xl'
+                  ? 'bg-surface-2 border-blue-500 shadow-md ring-1 ring-blue-500/20'
                   : isToday
-                  ? 'bg-slate-900/90 border-emerald-500/50 shadow-lg shadow-emerald-500/5'
-                  : 'bg-slate-900/70 border-slate-800 hover:border-slate-700 hover:bg-slate-900'
+                  ? 'bg-surface-1 border-emerald-500/50'
+                  : 'bg-surface-1 border-surface-border hover:border-surface-borderHover'
               }`}
             >
               {/* Day Header */}
               <div>
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                  <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-tight">
                     {dayNames[idx]}
                   </span>
                   {isToday && (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                       Today
                     </span>
                   )}
                 </div>
 
-                <div className="text-xl font-bold text-white mt-1">
+                <div className="text-lg sm:text-xl font-bold text-white mt-1 tabular-nums">
                   {dayDate.getDate()}
                 </div>
 
                 {/* Split Tag */}
-                <div className="mt-2.5">
+                <div className="mt-2">
                   <span
-                    className={`inline-block text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${splitStyle.bg} ${splitStyle.text} ${splitStyle.border}`}
+                    className={`inline-block text-[10px] font-semibold capitalize px-2 py-0.5 rounded-md border ${splitStyle.bg} ${splitStyle.text} ${splitStyle.border}`}
                   >
                     {split}
                   </span>
@@ -226,30 +221,29 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
               </div>
 
               {/* Workout details or empty prompt */}
-              <div className="mt-3 pt-2.5 border-t border-slate-800/60">
+              <div className="mt-2.5 pt-2 border-t border-surface-border">
                 {hasWorkout ? (
                   <div>
-                    <p className="text-xs font-semibold text-slate-200 line-clamp-1 group-hover:text-cyan-400 transition">
+                    <p className="text-xs font-medium text-slate-200 line-clamp-1 group-hover:text-blue-400 transition">
                       {workout.title || 'Session'}
                     </p>
-                    <div className="flex items-center justify-between text-[11px] text-slate-400 mt-1">
-                      <span>{workout.exercises.length} exercises</span>
+                    <div className="flex items-center justify-between text-[11px] text-slate-400 mt-0.5 tabular-nums">
+                      <span>{workout.exercises.length} lifts</span>
                       {workout.completed && (
                         <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
                       )}
                     </div>
                   </div>
                 ) : (
-                  <div className="flex items-center justify-between text-slate-500 text-xs">
-                    <span>Rest / Off</span>
-                    <Plus className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 text-cyan-400 transition" />
+                  <div className="flex items-center justify-between text-slate-400 text-xs">
+                    <span className="text-[11px]">Rest</span>
+                    <Plus className="w-3 h-3 opacity-0 group-hover:opacity-100 text-blue-400 transition" />
                   </div>
                 )}
 
-                {/* Logged Body Weight snippet */}
                 {workout?.bodyWeightKg ? (
-                  <div className="flex items-center gap-1 text-[10px] text-amber-400/90 font-medium mt-1.5 pt-1 border-t border-slate-800/40">
-                    <Scale className="w-3 h-3" />
+                  <div className="flex items-center gap-1 text-[10px] text-amber-400 font-medium mt-1 pt-1 border-t border-surface-border tabular-nums">
+                    <Scale className="w-2.5 h-2.5" />
                     <span>{workout.bodyWeightKg} kg</span>
                   </div>
                 ) : null}
