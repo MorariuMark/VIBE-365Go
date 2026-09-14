@@ -173,7 +173,7 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
       </div>
 
       {/* 7-Day Week Calendar Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2.5 sm:gap-3">
         {daysOfWeek.map((dayDate, idx) => {
           const dateISO = toDateISO(dayDate);
           const workout = workoutLogs[dateISO];
@@ -190,7 +190,7 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
                 onSelectDate(dateISO);
                 onOpenDayWorkout(dateISO);
               }}
-              className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between min-h-[160px] group ${
+              className={`p-3 sm:p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between min-h-[140px] sm:min-h-[160px] group ${
                 isSelected
                   ? 'bg-slate-800/95 border-cyan-500 ring-2 ring-cyan-500/20 shadow-xl'
                   : isToday

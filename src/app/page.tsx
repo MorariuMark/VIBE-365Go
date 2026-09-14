@@ -8,6 +8,8 @@ import {
   WorkoutDayLog,
   MuscleGroup,
   UserGymProfile,
+  HabitMetric,
+  HabitTargetCompletions,
 } from '@/types';
 import { getStoredData, saveStoredData } from '@/lib/storage';
 import { getTodayISO } from '@/lib/utils';
@@ -27,15 +29,16 @@ import {
   Database,
   Calendar,
   Sparkles,
-  Layers,
-  ArrowUpRight,
+  Grid,
 } from 'lucide-react';
 
-type ActiveTab = 'habits' | 'gym' | 'objectives' | 'analytics';
+type ActiveTab = 'habits' | 'fitness' | 'objectives';
+type FitnessSubTab = 'calendar' | 'matrix' | 'curves';
 
 export default function Home() {
   const [data, setData] = useState<AppDataBackup | null>(null);
   const [activeTab, setActiveTab] = useState<ActiveTab>('habits');
+  const [fitnessSubTab, setFitnessSubTab] = useState<FitnessSubTab>('calendar');
   const [selectedDate, setSelectedDate] = useState<string>(getTodayISO());
 
   // Gym dedicated day modal
@@ -141,6 +144,92 @@ export default function Home() {
     });
   };
 
+  const handleUpdateMetricValue = (
+    habitId: string,
+    dateISO: string,
+    metricId: string,
+    value: string | number | boolean
+  ) => {
+    updateData((prev) => {
+      const habits = prev.habits.map((h) => {
+        if (h.id !== habitId) return h;
+        const dateValues = { ...(h.dailyMetricValues?.[dateISO] || {}) };
+        dateValues[metricId] = value;
+        return {
+          ...h,
+          dailyMetricValues: {
+            ...(h.dailyMetricValues || {}),
+            [dateISO]: dateValues,
+          },
+        };
+      });
+      return { ...prev, habits };
+    });
+  };
+
+  const handleAddMetricDefinition = (habitId: string, metric: HabitMetric) => {
+    updateData((prev) => {
+      const habits = prev.habits.map((h) => {
+        if (h.id !== habitId) return h;
+        const currentMetrics = h.metrics || [];
+        return {
+          ...h,
+          metrics: [...currentMetrics, metric],
+        };
+      });
+      return { ...prev, habits };
+    });
+  };
+
+  const handleDeleteMetricDefinition = (habitId: string, metricId: string) => {
+    updateData((prev) => {
+      const habits = prev.habits.map((h) => {
+        if (h.id !== habitId) return h;
+        return {
+          ...h,
+          metrics: (h.metrics || []).filter((m) => m.id !== metricId),
+        };
+      });
+      return { ...prev, habits };
+    });
+  };
+
+  const handleUpdateTargetCompletions = (
+    habitId: string,
+    target: HabitTargetCompletions
+  ) => {
+    updateData((prev) => {
+      const habits = prev.habits.map((h) => {
+        if (h.id !== habitId) return h;
+        return {
+          ...h,
+          targetCompletions: target,
+        };
+      });
+      return { ...prev, habits };
+    });
+  };
+
+  const handleUpdateDailyNotes = (
+    habitId: string,
+    dateISO: string,
+    notes: string
+  ) => {
+    updateData((prev) => {
+      const habits = prev.habits.map((h) => {
+        if (h.id !== habitId) return h;
+        return {
+          ...h,
+          dailyNotes: {
+            ...(h.dailyNotes || {}),
+            [dateISO]: notes,
+          },
+        };
+      });
+      return { ...prev, habits };
+    });
+  };
+
   const handleCreateHabit = (
     newHabitData: Omit<Habit, 'id' | 'createdAt' | 'streak' | 'bestStreak' | 'history'>
   ) => {
@@ -227,7 +316,7 @@ export default function Home() {
     }
   };
 
-  // Gym Handlers
+  // Fitness Handlers
   const handleSaveWorkout = (workout: WorkoutDayLog) => {
     updateData((prev) => ({
       ...prev,
@@ -299,69 +388,65 @@ export default function Home() {
     return data.workoutLogs[dates[dates.length - 1]].bodyWeightKg;
   };
 
-  // Top stats
-  const totalStreaks = data.habits.reduce((acc, h) => acc + h.streak, 0);
-  const avgStreak =
-    data.habits.length > 0 ? Math.round(totalStreaks / data.habits.length) : 0;
   const bestOverallStreak = Math.max(0, ...data.habits.map((h) => h.bestStreak));
 
   return (
-    <div className="min-h-screen bg-[#070b14] text-slate-100 flex flex-col">
-      {/* Top Professional Header */}
+    <div className="min-h-screen bg-[#070b14] text-slate-100 flex flex-col antialiased">
+      {/* Top Header */}
       <header className="sticky top-0 z-40 bg-[#090e1a]/95 border-b border-slate-800/80 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          {/* Brand logo & tagline */}
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-400 via-cyan-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-emerald-500/20">
-              <Sparkles className="w-5 h-5 text-slate-950 stroke-[2.5]" />
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2">
+          {/* Brand Logo & Title */}
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-br from-emerald-400 via-cyan-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-emerald-500/20 flex-shrink-0">
+              <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-slate-950 stroke-[2.5]" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-black text-lg text-white tracking-tight">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <span className="font-black text-base sm:text-lg text-white tracking-tight">
                   VIBE <span className="text-emerald-400">365</span>
                 </span>
-                <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+                <span className="text-[9px] sm:text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
                   Pro
                 </span>
               </div>
-              <p className="text-[10px] text-slate-400 font-medium hidden sm:block">
-                Habit Matrix & IronForge Progressive Overload
+              <p className="text-[10px] text-slate-400 font-medium hidden sm:block truncate">
+                Habits, Fitness & Objectives
               </p>
             </div>
           </div>
 
-          {/* Navigation Tabs */}
+          {/* Desktop Navigation Tabs: Habits, Fitness, Objectives */}
           <nav className="hidden md:flex items-center gap-1 bg-slate-900/90 p-1 rounded-2xl border border-slate-800/80">
             <button
               type="button"
               onClick={() => setActiveTab('habits')}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              className={`flex items-center gap-2 px-4 py-1.5 rounded-xl text-xs font-bold transition-all ${
                 activeTab === 'habits'
                   ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
                   : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
               }`}
             >
               <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>Habits & Grid</span>
+              <span>Habits</span>
             </button>
 
             <button
               type="button"
-              onClick={() => setActiveTab('gym')}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                activeTab === 'gym'
+              onClick={() => setActiveTab('fitness')}
+              className={`flex items-center gap-2 px-4 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                activeTab === 'fitness'
                   ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
                   : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
               }`}
             >
               <Dumbbell className="w-3.5 h-3.5" />
-              <span>IronForge Gym</span>
+              <span>Fitness</span>
             </button>
 
             <button
               type="button"
               onClick={() => setActiveTab('objectives')}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              className={`flex items-center gap-2 px-4 py-1.5 rounded-xl text-xs font-bold transition-all ${
                 activeTab === 'objectives'
                   ? 'bg-indigo-500 text-white shadow-md shadow-indigo-500/20'
                   : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
@@ -370,27 +455,14 @@ export default function Home() {
               <Target className="w-3.5 h-3.5" />
               <span>Objectives</span>
             </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab('analytics')}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                activeTab === 'analytics'
-                  ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-              }`}
-            >
-              <TrendingUp className="w-3.5 h-3.5" />
-              <span>Strength Curves</span>
-            </button>
           </nav>
 
           {/* Right Header Controls */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
             {/* Best Streak Badge */}
-            <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs">
+            <div className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs">
               <Flame className="w-4 h-4 text-amber-400 animate-pulse" />
-              <span className="text-slate-400">Best Streak:</span>
+              <span className="text-slate-400">Best:</span>
               <span className="font-bold text-white">{bestOverallStreak}d</span>
             </div>
 
@@ -408,75 +480,69 @@ export default function Home() {
             <button
               type="button"
               onClick={() => setIsDataModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-medium transition"
-              title="Export/Import JSON backup and database state"
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-medium transition"
+              title="Backup data and JSON export/import"
             >
               <Database className="w-3.5 h-3.5 text-cyan-400" />
-              <span className="hidden sm:inline">Data & Backup</span>
+              <span className="hidden sm:inline">Backup</span>
             </button>
           </div>
         </div>
 
-        {/* Mobile Navigation Tabs */}
-        <div className="flex md:hidden items-center justify-around border-t border-slate-800/60 px-2 py-2 bg-slate-950">
+        {/* Mobile Navigation Tabs (Fixed Clean Spacing) */}
+        <div className="flex md:hidden items-center justify-around border-t border-slate-800/60 px-1 py-1.5 bg-slate-950/90">
           <button
             type="button"
             onClick={() => setActiveTab('habits')}
-            className={`flex flex-col items-center gap-1 text-[11px] font-bold ${
-              activeTab === 'habits' ? 'text-emerald-400' : 'text-slate-500'
+            className={`flex-1 flex flex-col items-center py-1 rounded-lg text-xs font-bold transition ${
+              activeTab === 'habits' ? 'text-emerald-400 bg-emerald-500/10' : 'text-slate-400'
             }`}
           >
             <CheckCircle2 className="w-4 h-4" />
-            <span>Habits</span>
+            <span className="text-[10px] mt-0.5">Habits</span>
           </button>
           <button
             type="button"
-            onClick={() => setActiveTab('gym')}
-            className={`flex flex-col items-center gap-1 text-[11px] font-bold ${
-              activeTab === 'gym' ? 'text-cyan-400' : 'text-slate-500'
+            onClick={() => setActiveTab('fitness')}
+            className={`flex-1 flex flex-col items-center py-1 rounded-lg text-xs font-bold transition ${
+              activeTab === 'fitness' ? 'text-cyan-400 bg-cyan-500/10' : 'text-slate-400'
             }`}
           >
             <Dumbbell className="w-4 h-4" />
-            <span>Gym</span>
+            <span className="text-[10px] mt-0.5">Fitness</span>
           </button>
           <button
             type="button"
             onClick={() => setActiveTab('objectives')}
-            className={`flex flex-col items-center gap-1 text-[11px] font-bold ${
-              activeTab === 'objectives' ? 'text-indigo-400' : 'text-slate-500'
+            className={`flex-1 flex flex-col items-center py-1 rounded-lg text-xs font-bold transition ${
+              activeTab === 'objectives' ? 'text-indigo-400 bg-indigo-500/10' : 'text-slate-400'
             }`}
           >
             <Target className="w-4 h-4" />
-            <span>Goals</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('analytics')}
-            className={`flex flex-col items-center gap-1 text-[11px] font-bold ${
-              activeTab === 'analytics' ? 'text-amber-400' : 'text-slate-500'
-            }`}
-          >
-            <TrendingUp className="w-4 h-4" />
-            <span>Curves</span>
+            <span className="text-[10px] mt-0.5">Objectives</span>
           </button>
         </div>
       </header>
 
       {/* Main Container */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 flex-1 w-full space-y-8">
-        {/* Tab 1: Habits & Consistency Grid */}
+      <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-7 flex-1 w-full space-y-6 sm:space-y-8">
+        {/* TAB 1: HABITS */}
         {activeTab === 'habits' && (
           <div className="space-y-6">
-            {/* GitHub-Style Contribution Consistency Matrix */}
+            {/* Detailed Habits Activity Matrix with Days of Week & Month */}
             <ContributionGrid
               habits={data.habits}
               workoutLogs={data.workoutLogs}
+              colorTheme="emerald"
+              mode="habits"
+              title="Habits Activity Matrix"
+              subtitle="Daily habit completions and routine consistency grid"
               onSelectDate={(dateISO) => {
                 setSelectedDate(dateISO);
               }}
             />
 
-            {/* Daily Habits Checklist & Subtasks */}
+            {/* Daily Habits Checklist & Subtasks & Dynamic Metrics */}
             <HabitList
               habits={data.habits}
               selectedDate={selectedDate}
@@ -485,55 +551,127 @@ export default function Home() {
               onToggleSubtask={handleToggleSubtask}
               onAddSubtask={handleAddSubtask}
               onDeleteSubtask={handleDeleteSubtask}
+              onUpdateMetricValue={handleUpdateMetricValue}
+              onAddMetricDefinition={handleAddMetricDefinition}
+              onDeleteMetricDefinition={handleDeleteMetricDefinition}
+              onUpdateTargetCompletions={handleUpdateTargetCompletions}
+              onUpdateDailyNotes={handleUpdateDailyNotes}
               onCreateHabit={handleCreateHabit}
               onDeleteHabit={handleDeleteHabit}
             />
           </div>
         )}
 
-        {/* Tab 2: IronForge Gym Tracker */}
-        {activeTab === 'gym' && (
+        {/* TAB 2: FITNESS (formerly IronForge) */}
+        {activeTab === 'fitness' && (
           <div className="space-y-6">
-            <WeeklyCalendar
-              workoutLogs={data.workoutLogs}
-              gymProfile={data.gymProfile}
-              selectedDate={selectedDate}
-              onSelectDate={setSelectedDate}
-              onOpenDayWorkout={(dateISO) => setActiveWorkoutDate(dateISO)}
-              onUpdateGymProfile={handleUpdateGymProfile}
-            />
-
-            {/* Quick action bar */}
-            <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div>
-                <h4 className="text-base font-bold text-white">
-                  Ready to crush today’s session?
-                </h4>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Select a day above or click to launch the dedicated workout logger with
-                  Push/Pull/Legs splits, sticky exercises, and drop-set formulas.
-                </p>
-              </div>
+            {/* Fitness Sub-Section Switcher */}
+            <div className="flex items-center gap-1.5 bg-slate-900/90 border border-slate-800 p-1.5 rounded-2xl w-full sm:w-auto overflow-x-auto scrollbar-none">
+              <button
+                type="button"
+                onClick={() => setFitnessSubTab('calendar')}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+                  fitnessSubTab === 'calendar'
+                    ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                }`}
+              >
+                <Calendar className="w-3.5 h-3.5" />
+                <span>Weekly Calendar & Log</span>
+              </button>
 
               <button
                 type="button"
-                onClick={() => setActiveWorkoutDate(selectedDate)}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-extrabold text-xs transition shadow-lg shadow-cyan-500/20 whitespace-nowrap"
+                onClick={() => setFitnessSubTab('matrix')}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+                  fitnessSubTab === 'matrix'
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                }`}
               >
-                <Dumbbell className="w-4 h-4 stroke-[2.5]" />
-                <span>Open {selectedDate} Workout Log</span>
+                <Grid className="w-3.5 h-3.5" />
+                <span>Blue Activity Matrix</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setFitnessSubTab('curves')}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+                  fitnessSubTab === 'curves'
+                    ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                }`}
+              >
+                <TrendingUp className="w-3.5 h-3.5" />
+                <span>Strength Curves</span>
               </button>
             </div>
 
-            {/* Quick Preview of Strength Curves */}
-            <ProgressCurves
-              workoutLogs={data.workoutLogs}
-              muscleGroups={data.muscleGroups}
-            />
+            {/* Sub-view 1: Weekly Calendar & Day Logger */}
+            {fitnessSubTab === 'calendar' && (
+              <div className="space-y-6">
+                <WeeklyCalendar
+                  workoutLogs={data.workoutLogs}
+                  gymProfile={data.gymProfile}
+                  selectedDate={selectedDate}
+                  onSelectDate={setSelectedDate}
+                  onOpenDayWorkout={(dateISO) => setActiveWorkoutDate(dateISO)}
+                  onUpdateGymProfile={handleUpdateGymProfile}
+                />
+
+                {/* Quick Session Launch Card */}
+                <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div>
+                    <h4 className="text-sm sm:text-base font-bold text-white">
+                      Workout for {selectedDate}
+                    </h4>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Open dedicated session view to log Push/Pull/Legs exercises, sets, reps & drop sets.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveWorkoutDate(selectedDate)}
+                    className="flex items-center gap-2 px-4 sm:px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-extrabold text-xs transition shadow-lg shadow-cyan-500/20 whitespace-nowrap self-stretch sm:self-auto justify-center"
+                  >
+                    <Dumbbell className="w-4 h-4 stroke-[2.5]" />
+                    <span>Open {selectedDate} Session</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Sub-view 2: Dedicated Blue Activity Matrix for Gym */}
+            {fitnessSubTab === 'matrix' && (
+              <div className="space-y-6">
+                <ContributionGrid
+                  workoutLogs={data.workoutLogs}
+                  colorTheme="blue"
+                  mode="gym"
+                  title="Fitness Workout Activity Matrix"
+                  subtitle="Dedicated training consistency grid showing workout days, splits & volume in blue"
+                  onSelectDate={(dateISO) => {
+                    setSelectedDate(dateISO);
+                    setActiveWorkoutDate(dateISO);
+                  }}
+                />
+              </div>
+            )}
+
+            {/* Sub-view 3: Strength Curves (now subsection of fitness) */}
+            {fitnessSubTab === 'curves' && (
+              <div className="space-y-6">
+                <ProgressCurves
+                  workoutLogs={data.workoutLogs}
+                  muscleGroups={data.muscleGroups}
+                />
+              </div>
+            )}
           </div>
         )}
 
-        {/* Tab 3: Objectives */}
+        {/* TAB 3: OBJECTIVES */}
         {activeTab === 'objectives' && (
           <ObjectiveBoard
             objectives={data.objectives}
@@ -541,14 +679,6 @@ export default function Home() {
             onUpdateProgress={handleUpdateObjectiveProgress}
             onCreateObjective={handleCreateObjective}
             onDeleteObjective={handleDeleteObjective}
-          />
-        )}
-
-        {/* Tab 4: Strength Curves & Insights */}
-        {activeTab === 'analytics' && (
-          <ProgressCurves
-            workoutLogs={data.workoutLogs}
-            muscleGroups={data.muscleGroups}
           />
         )}
       </main>
@@ -576,15 +706,15 @@ export default function Home() {
       )}
 
       {/* Footer */}
-      <footer className="border-t border-slate-800/80 bg-[#090e1a] py-6 text-center text-xs text-slate-500">
+      <footer className="border-t border-slate-800/80 bg-[#090e1a] py-5 sm:py-6 text-center text-xs text-slate-500 mt-auto">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <p>© 2026 VIBE 365. Built for high performers & serious athletes.</p>
+          <p>© 2026 VIBE 365. Built for high performers & athletes.</p>
           <div className="flex items-center gap-4 text-[11px] text-slate-400">
-            <span>Progressive Overload</span>
+            <span>Habits & Sub-sets</span>
             <span>•</span>
-            <span>Drop Sets Support</span>
+            <span>Blue Fitness Matrix</span>
             <span>•</span>
-            <span>JSON Backup Ready</span>
+            <span>Strength Curves</span>
           </div>
         </div>
       </footer>

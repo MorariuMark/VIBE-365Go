@@ -119,6 +119,18 @@ export const INITIAL_HABITS: Habit[] = [
     streak: 18,
     bestStreak: 32,
     createdAt: getDateString(60),
+    targetCompletions: { count: 7, period: 'week' },
+    metrics: [
+      { id: 'm_water', label: 'Water Drank', type: 'number', unit: 'ml', defaultValue: 500 },
+      { id: 'm_stretch', label: 'Mobility Time', type: 'number', unit: 'min', defaultValue: 10 },
+      { id: 'm_sunlight', label: 'Sunlight Exposure', type: 'boolean', defaultValue: true },
+    ],
+    dailyMetricValues: {
+      [getDateString(0)]: { m_water: 600, m_stretch: 12, m_sunlight: true },
+    },
+    dailyNotes: {
+      [getDateString(0)]: 'Felt energized after early morning walk.',
+    },
     subtasks: [
       { id: 'sub_1_1', title: 'Drink 500ml water + electrolytes', completed: true },
       { id: 'sub_1_2', title: '10 min mobility & dynamic stretch', completed: true },
@@ -127,18 +139,58 @@ export const INITIAL_HABITS: Habit[] = [
     history: generateHabitHistory(45, 0.85),
   },
   {
+    id: 'habit_write',
+    title: 'Writing & Creative Focus',
+    description: 'Daily writing sprint: track active minutes and total words composed.',
+    category: 'productivity',
+    color: '#8b5cf6', // violet
+    streak: 8,
+    bestStreak: 16,
+    createdAt: getDateString(30),
+    targetCompletions: { count: 5, period: 'week' },
+    metrics: [
+      { id: 'm_write_min', label: 'Minutes', type: 'number', unit: 'min', defaultValue: 45 },
+      { id: 'm_write_words', label: 'Words Written', type: 'number', unit: 'words', defaultValue: 750 },
+      { id: 'm_published', label: 'Draft Exported', type: 'boolean', defaultValue: false },
+      { id: 'm_topic', label: 'Theme / Topic', type: 'text', defaultValue: 'Engineering & Deep Work' },
+    ],
+    dailyMetricValues: {
+      [getDateString(0)]: { m_write_min: 45, m_write_words: 820, m_published: true, m_topic: 'Architecture & System Design' },
+    },
+    dailyNotes: {
+      [getDateString(0)]: 'Finished draft for the new system proposal.',
+    },
+    subtasks: [
+      { id: 'sub_w_1', title: 'Set 45-min timer & distraction blocker', completed: true },
+      { id: 'sub_w_2', title: 'Draft without self-editing for first 30 min', completed: true },
+      { id: 'sub_w_3', title: 'Log total words and minutes in VIBE 365', completed: true },
+    ],
+    history: generateHabitHistory(45, 0.8),
+  },
+  {
     id: 'habit_2',
-    title: 'IronForge Workout Session',
+    title: 'Fitness & Strength Session',
     description: 'Hit scheduled split (Push/Pull/Legs), push to RPE 8-9 with drop sets.',
     category: 'fitness',
     color: '#06b6d4', // cyan
     streak: 12,
     bestStreak: 24,
     createdAt: getDateString(90),
+    targetCompletions: { count: 4, period: 'week' },
+    metrics: [
+      { id: 'm_gym_min', label: 'Duration', type: 'number', unit: 'min', defaultValue: 65 },
+      { id: 'm_rpe', label: 'Session RPE (1-10)', type: 'number', defaultValue: 8.5 },
+    ],
+    dailyMetricValues: {
+      [getDateString(0)]: { m_gym_min: 65, m_rpe: 8.5 },
+    },
+    dailyNotes: {
+      [getDateString(0)]: 'Heavy push day, broke PR on chest press.',
+    },
     subtasks: [
       { id: 'sub_2_1', title: 'Dynamic warm-up & shoulder mobility', completed: true },
       { id: 'sub_2_2', title: 'Execute primary compound lifts with drop sets', completed: true },
-      { id: 'sub_2_3', title: 'Log all sets, reps & kg in IronForge', completed: true },
+      { id: 'sub_2_3', title: 'Log all sets, reps & kg in Fitness section', completed: true },
       { id: 'sub_2_4', title: 'Post-workout protein shake (40g)', completed: false },
     ],
     history: generateHabitHistory(45, 0.75),
@@ -148,10 +200,15 @@ export const INITIAL_HABITS: Habit[] = [
     title: 'Deep Focus Work Block (4h)',
     description: 'Distraction-free high leverage coding and engineering.',
     category: 'productivity',
-    color: '#8b5cf6', // violet
+    color: '#3b82f6', // blue
     streak: 9,
     bestStreak: 15,
     createdAt: getDateString(60),
+    targetCompletions: { count: 20, period: 'month' },
+    metrics: [
+      { id: 'm_sprints', label: 'Pomodoros / Sprints', type: 'number', defaultValue: 4 },
+      { id: 'm_focus_score', label: 'Focus Score (1-10)', type: 'number', defaultValue: 9 },
+    ],
     subtasks: [
       { id: 'sub_3_1', title: 'Phone in Do-Not-Disturb drawer', completed: true },
       { id: 'sub_3_2', title: 'Sprint 1: 90 min uninterrupted deep work', completed: true },
@@ -168,6 +225,11 @@ export const INITIAL_HABITS: Habit[] = [
     streak: 21,
     bestStreak: 21,
     createdAt: getDateString(60),
+    targetCompletions: { count: 7, period: 'week' },
+    metrics: [
+      { id: 'm_water_liters', label: 'Water (Liters)', type: 'number', unit: 'L', defaultValue: 3.5 },
+      { id: 'm_protein_g', label: 'Protein (grams)', type: 'number', unit: 'g', defaultValue: 165 },
+    ],
     subtasks: [
       { id: 'sub_4_1', title: 'Drink minimum 3.5 Liters water', completed: true },
       { id: 'sub_4_2', title: 'Hit 160g protein target', completed: false },
@@ -184,8 +246,9 @@ export const INITIAL_HABITS: Habit[] = [
     streak: 14,
     bestStreak: 28,
     createdAt: getDateString(60),
+    targetCompletions: { count: 28, period: 'month' },
     subtasks: [
-      { id: 'sub_5_1', title: 'Step on scale & log weight in IronForge', completed: false },
+      { id: 'sub_5_1', title: 'Step on scale & log weight in Fitness', completed: false },
       { id: 'sub_5_2', title: 'No blue light / screen off 45m before bed', completed: false },
       { id: 'sub_5_3', title: 'Target 8 hours quality sleep', completed: false },
     ],

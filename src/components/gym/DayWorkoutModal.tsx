@@ -577,9 +577,10 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                           </button>
                         </div>
 
-                        {/* Sets Table */}
+                        {/* Sets Table - Responsive */}
                         <div className="space-y-2">
-                          <div className="grid grid-cols-12 text-[11px] font-bold text-slate-400 uppercase tracking-wider px-2">
+                          {/* Desktop Column Header */}
+                          <div className="hidden sm:grid grid-cols-12 text-[11px] font-bold text-slate-400 uppercase tracking-wider px-2">
                             <span className="col-span-1">Set</span>
                             <span className="col-span-3">Weight (kg)</span>
                             <span className="col-span-2">Reps</span>
@@ -590,141 +591,265 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                           {loggedEx.sets.map((set, setIdx) => (
                             <div
                               key={set.id}
-                              className={`grid grid-cols-12 items-center gap-2 p-2 rounded-xl transition ${
+                              className={`p-3 sm:p-2 rounded-xl border transition ${
                                 set.completed
-                                  ? 'bg-emerald-950/20 border border-emerald-800/30'
-                                  : 'bg-slate-950/60 border border-slate-850'
+                                  ? 'bg-emerald-950/25 border-emerald-800/40'
+                                  : 'bg-slate-950/60 border-slate-800'
                               }`}
                             >
-                              {/* Set number */}
-                              <div className="col-span-1 font-bold text-xs text-slate-300">
-                                #{set.setNumber}
+                              {/* Desktop Grid Layout */}
+                              <div className="hidden sm:grid grid-cols-12 items-center gap-2">
+                                <div className="col-span-1 font-bold text-xs text-slate-300">
+                                  #{set.setNumber}
+                                </div>
+                                <div className="col-span-3 flex items-center gap-1">
+                                  <input
+                                    type="number"
+                                    step="any"
+                                    min="0"
+                                    value={set.weightKg}
+                                    onChange={(e) =>
+                                      handleUpdateSet(loggedEx.id, set.id, {
+                                        weightKg: parseFloat(e.target.value) || 0,
+                                      })
+                                    }
+                                    className="w-full px-2 py-1 rounded-lg bg-slate-900 border border-slate-700 text-xs font-bold text-white focus:outline-none focus:border-cyan-500"
+                                  />
+                                  <span className="text-[10px] text-slate-500 font-semibold">kg</span>
+                                </div>
+                                <div className="col-span-2 flex items-center gap-1">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={set.reps}
+                                    onChange={(e) =>
+                                      handleUpdateSet(loggedEx.id, set.id, {
+                                        reps: parseInt(e.target.value, 10) || 0,
+                                      })
+                                    }
+                                    className="w-full px-2 py-1 rounded-lg bg-slate-900 border border-slate-700 text-xs font-bold text-white focus:outline-none focus:border-cyan-500"
+                                  />
+                                  <span className="text-[10px] text-slate-500 font-semibold">reps</span>
+                                </div>
+                                <div className="col-span-4">
+                                  {set.isDropSet && set.dropSet ? (
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-amber-400 font-bold text-xs">+</span>
+                                      <input
+                                        type="number"
+                                        step="any"
+                                        min="0"
+                                        placeholder="kg"
+                                        value={set.dropSet.weightKg}
+                                        onChange={(e) =>
+                                          handleUpdateSet(loggedEx.id, set.id, {
+                                            dropSet: {
+                                              ...set.dropSet!,
+                                              weightKg: parseFloat(e.target.value) || 0,
+                                            },
+                                          })
+                                        }
+                                        className="w-14 px-1.5 py-1 rounded-lg bg-slate-900 border border-amber-500/50 text-xs font-bold text-amber-300 focus:outline-none"
+                                      />
+                                      <span className="text-[10px] text-slate-500">kg ×</span>
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        placeholder="reps"
+                                        value={set.dropSet.reps}
+                                        onChange={(e) =>
+                                          handleUpdateSet(loggedEx.id, set.id, {
+                                            dropSet: {
+                                              ...set.dropSet!,
+                                              reps: parseInt(e.target.value, 10) || 0,
+                                            },
+                                          })
+                                        }
+                                        className="w-12 px-1.5 py-1 rounded-lg bg-slate-900 border border-amber-500/50 text-xs font-bold text-amber-300 focus:outline-none"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => handleToggleDropSet(loggedEx.id, set.id)}
+                                        className="text-slate-500 hover:text-rose-400 p-0.5"
+                                        title="Remove drop set"
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleToggleDropSet(loggedEx.id, set.id)}
+                                      className="text-[11px] font-semibold text-slate-400 hover:text-amber-400 transition flex items-center gap-1"
+                                    >
+                                      <Plus className="w-3 h-3" />
+                                      <span>Add Drop Set</span>
+                                    </button>
+                                  )}
+                                </div>
+                                <div className="col-span-2 flex items-center justify-end gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDuplicateSet(loggedEx.id, setIdx)}
+                                    className="p-1 rounded text-slate-500 hover:text-white"
+                                    title="Duplicate set"
+                                  >
+                                    <Copy className="w-3 h-3" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteSet(loggedEx.id, set.id)}
+                                    className="p-1 rounded text-slate-500 hover:text-rose-400"
+                                    title="Delete set"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleUpdateSet(loggedEx.id, set.id, {
+                                        completed: !set.completed,
+                                      })
+                                    }
+                                    className={`w-6 h-6 rounded-lg flex items-center justify-center border transition ${
+                                      set.completed
+                                        ? 'bg-emerald-500 border-emerald-400 text-slate-950'
+                                        : 'bg-slate-800 border-slate-700 text-transparent hover:border-emerald-500'
+                                    }`}
+                                  >
+                                    <Check className="w-3.5 h-3.5 stroke-[3]" />
+                                  </button>
+                                </div>
                               </div>
 
-                              {/* Weight kg input */}
-                              <div className="col-span-3 flex items-center gap-1">
-                                <input
-                                  type="number"
-                                  step="any"
-                                  min="0"
-                                  value={set.weightKg}
-                                  onChange={(e) =>
-                                    handleUpdateSet(loggedEx.id, set.id, {
-                                      weightKg: parseFloat(e.target.value) || 0,
-                                    })
-                                  }
-                                  className="w-full px-2 py-1 rounded-lg bg-slate-900 border border-slate-700 text-xs font-bold text-white focus:outline-none focus:border-cyan-500"
-                                />
-                                <span className="text-[10px] text-slate-500 font-semibold">kg</span>
-                              </div>
+                              {/* Mobile Stacked Layout */}
+                              <div className="sm:hidden space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <span className="font-bold text-xs text-white">Set #{set.setNumber}</span>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDuplicateSet(loggedEx.id, setIdx)}
+                                      className="p-1 text-slate-400 hover:text-white"
+                                      title="Duplicate set"
+                                    >
+                                      <Copy className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteSet(loggedEx.id, set.id)}
+                                      className="p-1 text-slate-400 hover:text-rose-400"
+                                      title="Delete set"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        handleUpdateSet(loggedEx.id, set.id, {
+                                          completed: !set.completed,
+                                        })
+                                      }
+                                      className={`px-2.5 py-1 rounded-lg text-xs font-bold border flex items-center gap-1 ${
+                                        set.completed
+                                          ? 'bg-emerald-500 text-slate-950 border-emerald-400'
+                                          : 'bg-slate-800 text-slate-400 border-slate-700'
+                                      }`}
+                                    >
+                                      <Check className="w-3 h-3" />
+                                      <span>{set.completed ? 'Done' : 'Mark'}</span>
+                                    </button>
+                                  </div>
+                                </div>
 
-                              {/* Reps input */}
-                              <div className="col-span-2 flex items-center gap-1">
-                                <input
-                                  type="number"
-                                  min="0"
-                                  value={set.reps}
-                                  onChange={(e) =>
-                                    handleUpdateSet(loggedEx.id, set.id, {
-                                      reps: parseInt(e.target.value, 10) || 0,
-                                    })
-                                  }
-                                  className="w-full px-2 py-1 rounded-lg bg-slate-900 border border-slate-700 text-xs font-bold text-white focus:outline-none focus:border-cyan-500"
-                                />
-                                <span className="text-[10px] text-slate-500 font-semibold">reps</span>
-                              </div>
-
-                              {/* Drop Set Section */}
-                              <div className="col-span-4">
-                                {set.isDropSet && set.dropSet ? (
-                                  <div className="flex items-center gap-1">
-                                    <span className="text-amber-400 font-bold text-xs">+</span>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div>
+                                    <label className="block text-[10px] text-slate-400 mb-0.5">Weight (kg)</label>
                                     <input
                                       type="number"
                                       step="any"
                                       min="0"
-                                      placeholder="kg"
-                                      value={set.dropSet.weightKg}
+                                      value={set.weightKg}
                                       onChange={(e) =>
                                         handleUpdateSet(loggedEx.id, set.id, {
-                                          dropSet: {
-                                            ...set.dropSet!,
-                                            weightKg: parseFloat(e.target.value) || 0,
-                                          },
+                                          weightKg: parseFloat(e.target.value) || 0,
                                         })
                                       }
-                                      className="w-14 px-1.5 py-1 rounded-lg bg-slate-900 border border-amber-500/50 text-xs font-bold text-amber-300 focus:outline-none"
+                                      className="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs font-bold text-white"
                                     />
-                                    <span className="text-[10px] text-slate-500">kg ×</span>
+                                  </div>
+                                  <div>
+                                    <label className="block text-[10px] text-slate-400 mb-0.5">Reps</label>
                                     <input
                                       type="number"
                                       min="0"
-                                      placeholder="reps"
-                                      value={set.dropSet.reps}
+                                      value={set.reps}
                                       onChange={(e) =>
                                         handleUpdateSet(loggedEx.id, set.id, {
-                                          dropSet: {
-                                            ...set.dropSet!,
-                                            reps: parseInt(e.target.value, 10) || 0,
-                                          },
+                                          reps: parseInt(e.target.value, 10) || 0,
                                         })
                                       }
-                                      className="w-12 px-1.5 py-1 rounded-lg bg-slate-900 border border-amber-500/50 text-xs font-bold text-amber-300 focus:outline-none"
+                                      className="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs font-bold text-white"
                                     />
+                                  </div>
+                                </div>
+
+                                {/* Drop Set on Mobile */}
+                                <div className="pt-1">
+                                  {set.isDropSet && set.dropSet ? (
+                                    <div className="bg-slate-900 p-2 rounded-lg border border-amber-500/40 flex items-center justify-between gap-2">
+                                      <div className="flex items-center gap-1.5 text-xs">
+                                        <span className="text-amber-400 font-bold">Drop:</span>
+                                        <input
+                                          type="number"
+                                          step="any"
+                                          placeholder="kg"
+                                          value={set.dropSet.weightKg}
+                                          onChange={(e) =>
+                                            handleUpdateSet(loggedEx.id, set.id, {
+                                              dropSet: {
+                                                ...set.dropSet!,
+                                                weightKg: parseFloat(e.target.value) || 0,
+                                              },
+                                            })
+                                          }
+                                          className="w-14 px-1.5 py-1 rounded bg-slate-950 border border-amber-500/50 text-xs font-bold text-amber-300"
+                                        />
+                                        <span className="text-slate-400">kg ×</span>
+                                        <input
+                                          type="number"
+                                          placeholder="reps"
+                                          value={set.dropSet.reps}
+                                          onChange={(e) =>
+                                            handleUpdateSet(loggedEx.id, set.id, {
+                                              dropSet: {
+                                                ...set.dropSet!,
+                                                reps: parseInt(e.target.value, 10) || 0,
+                                              },
+                                            })
+                                          }
+                                          className="w-12 px-1.5 py-1 rounded bg-slate-950 border border-amber-500/50 text-xs font-bold text-amber-300"
+                                        />
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleToggleDropSet(loggedEx.id, set.id)}
+                                        className="text-slate-500 hover:text-rose-400"
+                                      >
+                                        <X className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  ) : (
                                     <button
                                       type="button"
                                       onClick={() => handleToggleDropSet(loggedEx.id, set.id)}
-                                      className="text-slate-500 hover:text-rose-400 p-0.5"
-                                      title="Remove drop set"
+                                      className="text-xs text-amber-400 hover:underline flex items-center gap-1"
                                     >
-                                      <X className="w-3 h-3" />
+                                      <Plus className="w-3 h-3" />
+                                      <span>Add Drop Set</span>
                                     </button>
-                                  </div>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleToggleDropSet(loggedEx.id, set.id)}
-                                    className="text-[11px] font-semibold text-slate-400 hover:text-amber-400 transition flex items-center gap-1"
-                                  >
-                                    <Plus className="w-3 h-3" />
-                                    <span>Add Drop Set</span>
-                                  </button>
-                                )}
-                              </div>
-
-                              {/* Completed checkmark & row actions */}
-                              <div className="col-span-2 flex items-center justify-end gap-1.5">
-                                <button
-                                  type="button"
-                                  onClick={() => handleDuplicateSet(loggedEx.id, setIdx)}
-                                  className="p-1 rounded text-slate-500 hover:text-white"
-                                  title="Duplicate set"
-                                >
-                                  <Copy className="w-3 h-3" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteSet(loggedEx.id, set.id)}
-                                  className="p-1 rounded text-slate-500 hover:text-rose-400"
-                                  title="Delete set"
-                                >
-                                  <Trash2 className="w-3 h-3" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    handleUpdateSet(loggedEx.id, set.id, {
-                                      completed: !set.completed,
-                                    })
-                                  }
-                                  className={`w-6 h-6 rounded-lg flex items-center justify-center border transition ${
-                                    set.completed
-                                      ? 'bg-emerald-500 border-emerald-400 text-slate-950'
-                                      : 'bg-slate-800 border-slate-700 text-transparent hover:border-emerald-500'
-                                  }`}
-                                >
-                                  <Check className="w-3.5 h-3.5 stroke-[3]" />
-                                </button>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           ))}

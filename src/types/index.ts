@@ -6,6 +6,21 @@ export interface HabitSubtask {
   completed: boolean;
 }
 
+export type HabitMetricType = 'number' | 'text' | 'boolean';
+
+export interface HabitMetric {
+  id: string;
+  label: string; // e.g. "Minutes", "Words written", "Pages read"
+  type: HabitMetricType;
+  unit?: string; // e.g. "min", "words", "pg"
+  defaultValue?: string | number | boolean;
+}
+
+export interface HabitTargetCompletions {
+  count: number; // e.g. 4
+  period: 'week' | 'month'; // 'week' or 'month'
+}
+
 export interface Habit {
   id: string;
   title: string;
@@ -17,6 +32,11 @@ export interface Habit {
   bestStreak: number;
   createdAt: string; // ISO date
   history: Record<string, boolean>; // date string "YYYY-MM-DD" -> completed status
+  targetCompletions?: HabitTargetCompletions; // minimum completions per week/month
+  metrics?: HabitMetric[]; // custom sub set variables (e.g. minutes, words, amount)
+  dailyMetricValues?: Record<string, Record<string, string | number | boolean>>; // dateISO -> metricId -> val
+  dailyNotes?: Record<string, string>; // dateISO -> notes for the day
+  generalNotes?: string;
 }
 
 export interface Objective {

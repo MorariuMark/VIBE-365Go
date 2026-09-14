@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Habit } from '@/types';
+import { Habit, HabitMetric, HabitTargetCompletions } from '@/types';
 import { HabitCard } from './HabitCard';
 import { formatDatePretty, getTodayISO } from '@/lib/utils';
 import {
@@ -12,6 +12,8 @@ import {
   Sparkles,
   X,
   PlusCircle,
+  Sliders,
+  Target,
 } from 'lucide-react';
 
 interface HabitListProps {
@@ -22,6 +24,16 @@ interface HabitListProps {
   onToggleSubtask: (habitId: string, subtaskId: string) => void;
   onAddSubtask: (habitId: string, subtaskTitle: string) => void;
   onDeleteSubtask: (habitId: string, subtaskId: string) => void;
+  onUpdateMetricValue: (
+    habitId: string,
+    dateISO: string,
+    metricId: string,
+    value: string | number | boolean
+  ) => void;
+  onAddMetricDefinition: (habitId: string, metric: HabitMetric) => void;
+  onDeleteMetricDefinition: (habitId: string, metricId: string) => void;
+  onUpdateTargetCompletions: (habitId: string, target: HabitTargetCompletions) => void;
+  onUpdateDailyNotes: (habitId: string, dateISO: string, notes: string) => void;
   onCreateHabit: (newHabit: Omit<Habit, 'id' | 'createdAt' | 'streak' | 'bestStreak' | 'history'>) => void;
   onDeleteHabit: (habitId: string) => void;
 }
@@ -34,18 +46,32 @@ export const HabitList: React.FC<HabitListProps> = ({
   onToggleSubtask,
   onAddSubtask,
   onDeleteSubtask,
+  onUpdateMetricValue,
+  onAddMetricDefinition,
+  onDeleteMetricDefinition,
+  onUpdateTargetCompletions,
+  onUpdateDailyNotes,
   onCreateHabit,
   onDeleteHabit,
 }) => {
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // New Habit Modal State
+  // New Habit Form State
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState<Habit['category']>('fitness');
   const [color, setColor] = useState('#10b981');
   const [subtasksInput, setSubtasksInput] = useState<string[]>(['']);
+
+  // Target Completions
+  const [targetCount, setTargetCount] = useState<number>(4);
+  const [targetPeriod, setTargetPeriod] = useState<'week' | 'month'>('week');
+
+  // Sub-Set Metric fields
+  const [metricsInput, setMetricsInput] = useState<
+    { label: string; type: 'number' | 'text' | 'boolean'; unit: string }[]
+  >([{ label: 'Minutes', type: 'number', unit: 'min' }]);
 
   const today = getTodayISO();
   const isToday = selectedDate === today;
@@ -77,6 +103,20 @@ export const HabitList: React.FC<HabitListProps> = ({
     setSubtasksInput(subtasksInput.filter((_, i) => i !== index));
   };
 
+  const handleAddMetricField = () => {
+    setMetricsInput([...metricsInput, { label: '', type: 'number', unit: '' }]);
+  };
+
+  const handleMetricChange = (index: number, field: string, val: any) => {
+    const updated = [...metricsInput];
+    updated[index] = { ...updated[index], [field]: val };
+    setMetricsInput(updated);
+  };
+
+  const handleRemoveMetricField = (index: number) => {
+    setMetricsInput(metricsInput.filter((_, i) => i !== index));
+  };
+
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
@@ -89,12 +129,26 @@ export const HabitList: React.FC<HabitListProps> = ({
         completed: false,
       }));
 
+    const validMetrics: HabitMetric[] = metricsInput
+      .filter((m) => m.label.trim().length > 0)
+      .map((m, idx) => ({
+        id: `m_${Date.now()}_${idx}`,
+        label: m.label.trim(),
+        type: m.type,
+        unit: m.unit.trim() || undefined,
+      }));
+
     onCreateHabit({
       title: title.trim(),
       description: description.trim() || undefined,
       category,
       color,
       subtasks: validSubtasks,
+      targetCompletions: {
+        count: targetCount,
+        period: targetPeriod,
+      },
+      metrics: validMetrics,
     });
 
     // Reset form
@@ -103,6 +157,7 @@ export const HabitList: React.FC<HabitListProps> = ({
     setCategory('fitness');
     setColor('#10b981');
     setSubtasksInput(['']);
+    setMetricsInput([{ label: 'Minutes', type: 'number', unit: 'min' }]);
     setIsModalOpen(false);
   };
 
@@ -117,23 +172,23 @@ export const HabitList: React.FC<HabitListProps> = ({
   ];
 
   return (
-    <div className="space-y-5">
-      {/* Date & Completion Header Bar */}
-      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 sm:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xl">
+    <div className="space-y-4 sm:space-y-5">
+      {/* Date & Completion Header Bar - Mobile friendly wrap */}
+      <div className="bg-slate-900/90 border border-slate-800/90 rounded-2xl p-4 sm:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xl">
         <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
+          <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex-shrink-0">
             <CheckCircle2 className="w-6 h-6" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-xl font-bold text-white">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-lg sm:text-xl font-bold text-white">
                 {isToday ? 'Today’s Habits' : formatDatePretty(selectedDate)}
               </h3>
               {!isToday && (
                 <button
                   type="button"
                   onClick={() => onSelectDate(today)}
-                  className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-emerald-400 border border-slate-700 hover:bg-slate-700 transition"
+                  className="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-emerald-400 border border-slate-700 hover:bg-slate-700 transition"
                 >
                   Jump to Today
                 </button>
@@ -145,22 +200,22 @@ export const HabitList: React.FC<HabitListProps> = ({
           </div>
         </div>
 
-        {/* Date input & New Habit trigger */}
-        <div className="flex items-center gap-3 w-full md:w-auto">
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700 text-xs text-slate-300">
-            <Calendar className="w-4 h-4 text-slate-400" />
+        {/* Date picker & New Habit trigger */}
+        <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto justify-between md:justify-end">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700 text-xs text-slate-300 flex-1 sm:flex-initial">
+            <Calendar className="w-4 h-4 text-slate-400 flex-shrink-0" />
             <input
               type="date"
               value={selectedDate}
               onChange={(e) => onSelectDate(e.target.value)}
-              className="bg-transparent text-slate-200 outline-none cursor-pointer"
+              className="bg-transparent text-slate-200 outline-none cursor-pointer w-full"
             />
           </div>
 
           <button
             type="button"
             onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition shadow-lg shadow-emerald-500/20"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition shadow-lg shadow-emerald-500/20 whitespace-nowrap"
           >
             <Plus className="w-4 h-4 stroke-[2.5]" />
             <span>New Habit</span>
@@ -168,14 +223,14 @@ export const HabitList: React.FC<HabitListProps> = ({
         </div>
       </div>
 
-      {/* Category Pills */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+      {/* Category Filter Pills */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin -mx-1 px-1">
         {categories.map((cat) => (
           <button
             key={cat.id}
             type="button"
             onClick={() => setActiveCategory(cat.id)}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
               activeCategory === cat.id
                 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shadow-sm'
                 : 'bg-slate-900/80 text-slate-400 border border-slate-800 hover:text-white hover:border-slate-700'
@@ -187,7 +242,7 @@ export const HabitList: React.FC<HabitListProps> = ({
       </div>
 
       {/* Habit Cards Grid / List */}
-      <div className="grid grid-cols-1 gap-3.5">
+      <div className="grid grid-cols-1 gap-3 sm:gap-4">
         {filteredHabits.length > 0 ? (
           filteredHabits.map((habit) => (
             <HabitCard
@@ -198,6 +253,11 @@ export const HabitList: React.FC<HabitListProps> = ({
               onToggleSubtask={onToggleSubtask}
               onAddSubtask={onAddSubtask}
               onDeleteSubtask={onDeleteSubtask}
+              onUpdateMetricValue={onUpdateMetricValue}
+              onAddMetricDefinition={onAddMetricDefinition}
+              onDeleteMetricDefinition={onDeleteMetricDefinition}
+              onUpdateTargetCompletions={onUpdateTargetCompletions}
+              onUpdateDailyNotes={onUpdateDailyNotes}
               onDeleteHabit={onDeleteHabit}
             />
           ))
@@ -218,8 +278,8 @@ export const HabitList: React.FC<HabitListProps> = ({
 
       {/* New Habit Creation Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
-          <div className="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-2xl shadow-2xl p-6 relative max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-2xl shadow-2xl p-5 sm:p-6 relative my-auto max-h-[90vh] overflow-y-auto">
             <button
               type="button"
               onClick={() => setIsModalOpen(false)}
@@ -243,7 +303,7 @@ export const HabitList: React.FC<HabitListProps> = ({
                   required
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="e.g. Read 20 Pages, Cold Shower, Stretching"
+                  placeholder="e.g. Daily Writing Sprint, Read 20 Pages, Morning Mobility"
                   className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white placeholder:text-slate-500 text-sm focus:outline-none focus:border-emerald-500"
                 />
               </div>
@@ -256,12 +316,12 @@ export const HabitList: React.FC<HabitListProps> = ({
                   type="text"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="e.g. Expand knowledge & focus daily"
+                  placeholder="e.g. Daily creative output: track active minutes and total words"
                   className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white placeholder:text-slate-500 text-sm focus:outline-none focus:border-emerald-500"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-300 mb-1">Category</label>
                   <select
@@ -281,7 +341,7 @@ export const HabitList: React.FC<HabitListProps> = ({
                 <div>
                   <label className="block text-xs font-semibold text-slate-300 mb-1">Badge Color</label>
                   <div className="flex items-center gap-2 pt-1">
-                    {['#10b981', '#06b6d4', '#8b5cf6', '#f59e0b', '#f43f5e'].map((c) => (
+                    {['#10b981', '#06b6d4', '#8b5cf6', '#f59e0b', '#f43f5e', '#3b82f6'].map((c) => (
                       <button
                         key={c}
                         type="button"
@@ -296,11 +356,100 @@ export const HabitList: React.FC<HabitListProps> = ({
                 </div>
               </div>
 
-              {/* Subtasks builder */}
+              {/* Minimum Completions Target (Week / Month) */}
+              <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-300">
+                  <Target className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Minimum Target Completions</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] text-slate-400 mb-0.5">Min Count</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max={targetPeriod === 'week' ? 7 : 31}
+                      value={targetCount}
+                      onChange={(e) => setTargetCount(parseInt(e.target.value, 10) || 1)}
+                      className="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-400 mb-0.5">Period</label>
+                    <select
+                      value={targetPeriod}
+                      onChange={(e) => setTargetPeriod(e.target.value as any)}
+                      className="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs text-white"
+                    >
+                      <option value="week">Per Week</option>
+                      <option value="month">Per Month</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sub-Set Metric Variables (minutes, words, numbers, bool) */}
+              <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-slate-300">
+                    <Sliders className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>Sub-Set Variables (e.g. Minutes, Words)</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAddMetricField}
+                    className="text-[11px] text-cyan-400 hover:underline flex items-center gap-1"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>Add Variable</span>
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  {metricsInput.map((m, idx) => (
+                    <div key={`m-in-${idx}`} className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={m.label}
+                        onChange={(e) => handleMetricChange(idx, 'label', e.target.value)}
+                        placeholder="Label (e.g. Minutes, Words)"
+                        className="flex-1 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs text-white"
+                      />
+                      <select
+                        value={m.type}
+                        onChange={(e) => handleMetricChange(idx, 'type', e.target.value)}
+                        className="w-24 px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs text-white"
+                      >
+                        <option value="number">Number</option>
+                        <option value="text">Text</option>
+                        <option value="boolean">Yes/No</option>
+                      </select>
+                      <input
+                        type="text"
+                        value={m.unit}
+                        onChange={(e) => handleMetricChange(idx, 'unit', e.target.value)}
+                        placeholder="unit (min)"
+                        className="w-16 px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs text-white"
+                      />
+                      {metricsInput.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveMetricField(idx)}
+                          className="text-slate-500 hover:text-rose-400 p-1"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Subtasks checklist builder */}
               <div className="pt-2 border-t border-slate-800">
                 <div className="flex items-center justify-between mb-2">
                   <label className="text-xs font-semibold text-slate-300">
-                    Subtasks Checklist (Optional)
+                    Checklist Steps (Optional)
                   </label>
                   <button
                     type="button"
@@ -312,14 +461,14 @@ export const HabitList: React.FC<HabitListProps> = ({
                   </button>
                 </div>
 
-                <div className="space-y-2 max-h-36 overflow-y-auto">
+                <div className="space-y-2 max-h-32 overflow-y-auto">
                   {subtasksInput.map((sub, idx) => (
                     <div key={`sub-input-${idx}`} className="flex items-center gap-2">
                       <input
                         type="text"
                         value={sub}
                         onChange={(e) => handleSubtaskChange(idx, e.target.value)}
-                        placeholder={`Step ${idx + 1} (e.g. Drink 250ml water)`}
+                        placeholder={`Step ${idx + 1}`}
                         className="flex-1 px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-white placeholder:text-slate-500 text-xs focus:outline-none focus:border-emerald-500"
                       />
                       {subtasksInput.length > 1 && (
