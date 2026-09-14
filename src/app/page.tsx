@@ -12,7 +12,7 @@ import {
   HabitTargetCompletions,
 } from '@/types';
 import { getStoredData, saveStoredData } from '@/lib/storage';
-import { getTodayISO } from '@/lib/utils';
+import { getTodayISO, formatDatePretty } from '@/lib/utils';
 import { ContributionGrid } from '@/components/habits/ContributionGrid';
 import { HabitList } from '@/components/habits/HabitList';
 import { ObjectiveBoard } from '@/components/objectives/ObjectiveBoard';
@@ -28,8 +28,12 @@ import {
   TrendingUp,
   Database,
   Calendar,
-  Sparkles,
   Grid,
+  Activity,
+  Plus,
+  ChevronRight,
+  ShieldCheck,
+  Scale,
 } from 'lucide-react';
 
 type ActiveTab = 'habits' | 'fitness' | 'objectives';
@@ -63,11 +67,11 @@ export default function Home() {
 
   if (!data) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-dark-900 text-white">
-        <div className="flex items-center gap-3">
-          <div className="w-5 h-5 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
-          <span className="text-sm font-semibold tracking-wide text-slate-300">
-            Initializing VIBE 365...
+      <div className="min-h-screen flex items-center justify-center bg-[#07080c] text-white">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+          <span className="text-xs font-mono tracking-widest text-slate-400 uppercase">
+            INITIALIZING VIBE 365 OS...
           </span>
         </div>
       </div>
@@ -83,7 +87,6 @@ export default function Home() {
         const isCurrentlyDone = Boolean(currentHist[dateISO]);
         currentHist[dateISO] = !isCurrentlyDone;
 
-        // Recalculate streak
         let streak = h.streak;
         if (!isCurrentlyDone) {
           streak += 1;
@@ -248,7 +251,7 @@ export default function Home() {
   };
 
   const handleDeleteHabit = (habitId: string) => {
-    if (window.confirm('Are you sure you want to delete this habit?')) {
+    if (window.confirm('Delete this habit permanently?')) {
       updateData((prev) => ({
         ...prev,
         habits: prev.habits.filter((h) => h.id !== habitId),
@@ -388,161 +391,223 @@ export default function Home() {
     return data.workoutLogs[dates[dates.length - 1]].bodyWeightKg;
   };
 
+  // HUD computed metrics
+  const todayHabitsTotal = data.habits.length;
+  const todayHabitsDone = data.habits.filter((h) => h.history?.[selectedDate]).length;
+  const todayHabitsPct =
+    todayHabitsTotal > 0 ? Math.round((todayHabitsDone / todayHabitsTotal) * 100) : 0;
   const bestOverallStreak = Math.max(0, ...data.habits.map((h) => h.bestStreak));
+  const currentActiveStreak = Math.max(0, ...data.habits.map((h) => h.streak));
+  const todayWorkout = data.workoutLogs[selectedDate];
+  const previousWeight = getPreviousLoggedWeight(selectedDate);
+  const weightDelta =
+    todayWorkout?.bodyWeightKg && previousWeight
+      ? (todayWorkout.bodyWeightKg - previousWeight).toFixed(1)
+      : null;
 
   return (
-    <div className="min-h-screen bg-[#070b14] text-slate-100 flex flex-col antialiased">
-      {/* Top Header */}
-      <header className="sticky top-0 z-40 bg-[#090e1a]/95 border-b border-slate-800/80 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2">
-          {/* Brand Logo & Title */}
-          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-br from-emerald-400 via-cyan-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-emerald-500/20 flex-shrink-0">
-              <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-slate-950 stroke-[2.5]" />
+    <div className="min-h-screen bg-[#07080c] text-slate-100 flex flex-col antialiased selection:bg-emerald-500 selection:text-black">
+      {/* Precision Engineered Top Bar */}
+      <header className="sticky top-0 z-40 bg-[#07080c]/90 border-b border-[#1a1f2e] backdrop-blur-xl">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
+          {/* Brand Mark & Title */}
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-[#111520] border border-[#232a3e] flex items-center justify-center text-emerald-400 flex-shrink-0 shadow-inner">
+              <Activity className="w-4 h-4 stroke-[2.5]" />
             </div>
             <div className="min-w-0">
-              <div className="flex items-center gap-1.5 sm:gap-2">
-                <span className="font-black text-base sm:text-lg text-white tracking-tight">
+              <div className="flex items-center gap-2">
+                <span className="font-extrabold text-base tracking-tight text-white font-sans">
                   VIBE <span className="text-emerald-400">365</span>
                 </span>
-                <span className="text-[9px] sm:text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
-                  Pro
+                <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-mono font-medium px-2 py-0.5 rounded-full bg-emerald-950/60 text-emerald-400 border border-emerald-800/40">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                  PERFORMANCE OS
                 </span>
               </div>
-              <p className="text-[10px] text-slate-400 font-medium hidden sm:block truncate">
-                Habits, Fitness & Objectives
-              </p>
             </div>
           </div>
 
-          {/* Desktop Navigation Tabs: Habits, Fitness, Objectives */}
-          <nav className="hidden md:flex items-center gap-1 bg-slate-900/90 p-1 rounded-2xl border border-slate-800/80">
+          {/* Unified Architectural Segmented Capsule Nav */}
+          <nav className="hidden md:flex items-center bg-[#0d1017] p-1 rounded-xl border border-[#1b2030]">
             <button
               type="button"
               onClick={() => setActiveTab('habits')}
-              className={`flex items-center gap-2 px-4 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 activeTab === 'habits'
-                  ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                  ? 'bg-[#1a2133] text-white border border-[#2e3752] shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              <CheckCircle2 className="w-3.5 h-3.5" />
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
               <span>Habits</span>
+              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-black/40 text-slate-400">
+                {data.habits.length}
+              </span>
             </button>
 
             <button
               type="button"
               onClick={() => setActiveTab('fitness')}
-              className={`flex items-center gap-2 px-4 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 activeTab === 'fitness'
-                  ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                  ? 'bg-[#1a2133] text-white border border-[#2e3752] shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              <Dumbbell className="w-3.5 h-3.5" />
+              <Dumbbell className="w-3.5 h-3.5 text-blue-400" />
               <span>Fitness</span>
+              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-black/40 text-slate-400 uppercase">
+                {todayWorkout?.splitType || 'PPL'}
+              </span>
             </button>
 
             <button
               type="button"
               onClick={() => setActiveTab('objectives')}
-              className={`flex items-center gap-2 px-4 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 activeTab === 'objectives'
-                  ? 'bg-indigo-500 text-white shadow-md shadow-indigo-500/20'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                  ? 'bg-[#1a2133] text-white border border-[#2e3752] shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              <Target className="w-3.5 h-3.5" />
+              <Target className="w-3.5 h-3.5 text-amber-400" />
               <span>Objectives</span>
+              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-black/40 text-slate-400">
+                {data.objectives.length}
+              </span>
             </button>
           </nav>
 
-          {/* Right Header Controls */}
+          {/* Right Action Strip */}
           <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-            {/* Best Streak Badge */}
-            <div className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs">
-              <Flame className="w-4 h-4 text-amber-400 animate-pulse" />
-              <span className="text-slate-400">Best:</span>
-              <span className="font-bold text-white">{bestOverallStreak}d</span>
-            </div>
-
-            {/* Quick Workout Modal Button */}
+            {/* Quick Workout Button */}
             <button
               type="button"
               onClick={() => setActiveWorkoutDate(selectedDate)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 text-xs font-bold transition"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold transition shadow-sm active-press"
             >
-              <Dumbbell className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Log Workout</span>
+              <Dumbbell className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span className="hidden sm:inline">Log Session</span>
             </button>
 
-            {/* Data & JSON Button */}
+            {/* Backup & System Modal */}
             <button
               type="button"
               onClick={() => setIsDataModalOpen(true)}
-              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-medium transition"
-              title="Backup data and JSON export/import"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#0d1017] hover:bg-[#141924] text-slate-300 border border-[#1c2234] text-xs font-medium transition"
+              title="Backup database and JSON sync"
             >
-              <Database className="w-3.5 h-3.5 text-cyan-400" />
-              <span className="hidden sm:inline">Backup</span>
+              <Database className="w-3.5 h-3.5 text-slate-400" />
+              <span className="hidden sm:inline font-mono">Sync</span>
             </button>
           </div>
         </div>
-
-        {/* Mobile Navigation Tabs (Fixed Clean Spacing) */}
-        <div className="flex md:hidden items-center justify-around border-t border-slate-800/60 px-1 py-1.5 bg-slate-950/90">
-          <button
-            type="button"
-            onClick={() => setActiveTab('habits')}
-            className={`flex-1 flex flex-col items-center py-1 rounded-lg text-xs font-bold transition ${
-              activeTab === 'habits' ? 'text-emerald-400 bg-emerald-500/10' : 'text-slate-400'
-            }`}
-          >
-            <CheckCircle2 className="w-4 h-4" />
-            <span className="text-[10px] mt-0.5">Habits</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('fitness')}
-            className={`flex-1 flex flex-col items-center py-1 rounded-lg text-xs font-bold transition ${
-              activeTab === 'fitness' ? 'text-cyan-400 bg-cyan-500/10' : 'text-slate-400'
-            }`}
-          >
-            <Dumbbell className="w-4 h-4" />
-            <span className="text-[10px] mt-0.5">Fitness</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('objectives')}
-            className={`flex-1 flex flex-col items-center py-1 rounded-lg text-xs font-bold transition ${
-              activeTab === 'objectives' ? 'text-indigo-400 bg-indigo-500/10' : 'text-slate-400'
-            }`}
-          >
-            <Target className="w-4 h-4" />
-            <span className="text-[10px] mt-0.5">Objectives</span>
-          </button>
-        </div>
       </header>
 
-      {/* Main Container */}
-      <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-7 flex-1 w-full space-y-6 sm:space-y-8">
+      {/* Athletic Performance HUD Strip */}
+      <section className="border-b border-[#141824] bg-[#090b10]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+            {/* HUD 1: Date & Target Day */}
+            <div className="bg-[#0e1119] border border-[#1b2131] rounded-xl p-3 flex flex-col justify-between">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400">
+                Target Date
+              </span>
+              <div className="flex items-baseline justify-between mt-1">
+                <span className="text-sm sm:text-base font-bold text-white">
+                  {formatDatePretty(selectedDate)}
+                </span>
+                <span className="text-[10px] font-mono text-slate-500">
+                  {selectedDate === getTodayISO() ? 'TODAY' : 'PAST'}
+                </span>
+              </div>
+            </div>
+
+            {/* HUD 2: Daily Habit Progress */}
+            <div className="bg-[#0e1119] border border-[#1b2131] rounded-xl p-3 flex flex-col justify-between">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400">
+                  Daily Habits
+                </span>
+                <span className="text-xs font-bold font-numeric text-emerald-400">
+                  {todayHabitsPct}%
+                </span>
+              </div>
+              <div className="mt-2 flex items-center gap-2">
+                <div className="flex-1 bg-[#181e2e] h-1.5 rounded-full overflow-hidden">
+                  <div
+                    className="bg-emerald-400 h-full rounded-full transition-all duration-500"
+                    style={{ width: `${todayHabitsPct}%` }}
+                  />
+                </div>
+                <span className="text-[11px] font-numeric text-slate-400 whitespace-nowrap">
+                  {todayHabitsDone}/{todayHabitsTotal}
+                </span>
+              </div>
+            </div>
+
+            {/* HUD 3: Training Split */}
+            <div className="bg-[#0e1119] border border-[#1b2131] rounded-xl p-3 flex flex-col justify-between">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400">
+                Workout Session
+              </span>
+              <div className="flex items-center justify-between mt-1">
+                <span className="text-xs sm:text-sm font-bold text-white uppercase tracking-wide">
+                  {todayWorkout?.title || (todayWorkout?.splitType ? `${todayWorkout.splitType} Day` : 'Push Day')}
+                </span>
+                <span
+                  className={`text-[9px] font-mono px-1.5 py-0.5 rounded ${
+                    todayWorkout?.completed
+                      ? 'bg-emerald-950/80 text-emerald-400 border border-emerald-800/40'
+                      : 'bg-slate-800 text-slate-400 border border-slate-700'
+                  }`}
+                >
+                  {todayWorkout?.completed ? 'COMPLETED' : 'PENDING'}
+                </span>
+              </div>
+            </div>
+
+            {/* HUD 4: Consistency Streak */}
+            <div className="bg-[#0e1119] border border-[#1b2131] rounded-xl p-3 flex flex-col justify-between">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400">
+                Streak Record
+              </span>
+              <div className="flex items-center justify-between mt-1">
+                <div className="flex items-center gap-1.5">
+                  <Flame className="w-4 h-4 text-amber-400" />
+                  <span className="text-sm sm:text-base font-bold text-white font-numeric">
+                    {currentActiveStreak}d
+                  </span>
+                </div>
+                <span className="text-[10px] font-mono text-slate-500">
+                  Best: <span className="text-slate-300 font-bold">{bestOverallStreak}d</span>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Main Content Viewport */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 flex-1 w-full space-y-6 sm:space-y-8 mb-16 md:mb-6">
         {/* TAB 1: HABITS */}
         {activeTab === 'habits' && (
           <div className="space-y-6">
-            {/* Detailed Habits Activity Matrix with Days of Week & Month */}
+            {/* Habits Consistency Matrix */}
             <ContributionGrid
               habits={data.habits}
               workoutLogs={data.workoutLogs}
               colorTheme="emerald"
               mode="habits"
               title="Habits Activity Matrix"
-              subtitle="Daily habit completions and routine consistency grid"
+              subtitle="GitHub-style consistency matrix tracking your daily completions and momentum"
               onSelectDate={(dateISO) => {
                 setSelectedDate(dateISO);
               }}
             />
 
-            {/* Daily Habits Checklist & Subtasks & Dynamic Metrics */}
+            {/* Habit Checklist, Subtasks & Metrics */}
             <HabitList
               habits={data.habits}
               selectedDate={selectedDate}
@@ -562,48 +627,48 @@ export default function Home() {
           </div>
         )}
 
-        {/* TAB 2: FITNESS (formerly IronForge) */}
+        {/* TAB 2: FITNESS */}
         {activeTab === 'fitness' && (
           <div className="space-y-6">
-            {/* Fitness Sub-Section Switcher */}
-            <div className="flex items-center gap-1.5 bg-slate-900/90 border border-slate-800 p-1.5 rounded-2xl w-full sm:w-auto overflow-x-auto scrollbar-none">
+            {/* Fitness Sub-Section Tabs */}
+            <div className="flex items-center gap-1 bg-[#0d1017] border border-[#1b2030] p-1 rounded-xl w-full sm:w-auto overflow-x-auto scrollbar-none">
               <button
                 type="button"
                 onClick={() => setFitnessSubTab('calendar')}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
                   fitnessSubTab === 'calendar'
-                    ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                    ? 'bg-[#1a2133] text-white border border-[#2e3752]'
+                    : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
-                <Calendar className="w-3.5 h-3.5" />
-                <span>Weekly Calendar & Log</span>
+                <Calendar className="w-3.5 h-3.5 text-blue-400" />
+                <span>Weekly Schedule</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setFitnessSubTab('matrix')}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
                   fitnessSubTab === 'matrix'
-                    ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                    ? 'bg-[#1a2133] text-white border border-[#2e3752]'
+                    : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
-                <Grid className="w-3.5 h-3.5" />
+                <Grid className="w-3.5 h-3.5 text-blue-400" />
                 <span>Blue Activity Matrix</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setFitnessSubTab('curves')}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
                   fitnessSubTab === 'curves'
-                    ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                    ? 'bg-[#1a2133] text-white border border-[#2e3752]'
+                    : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
-                <TrendingUp className="w-3.5 h-3.5" />
-                <span>Strength Curves</span>
+                <TrendingUp className="w-3.5 h-3.5 text-amber-400" />
+                <span>Strength Curves & 1RM</span>
               </button>
             </div>
 
@@ -619,24 +684,29 @@ export default function Home() {
                   onUpdateGymProfile={handleUpdateGymProfile}
                 />
 
-                {/* Quick Session Launch Card */}
-                <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                {/* Session Launch Card */}
+                <div className="athletic-card rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                   <div>
-                    <h4 className="text-sm sm:text-base font-bold text-white">
-                      Workout for {selectedDate}
-                    </h4>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      Open dedicated session view to log Push/Pull/Legs exercises, sets, reps & drop sets.
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800/40">
+                        {selectedDate}
+                      </span>
+                      <h4 className="text-sm sm:text-base font-bold text-white">
+                        {todayWorkout?.title || 'Scheduled Training Session'}
+                      </h4>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Log progressive overload sets, reps, drop sets formula, and daily weigh-in.
                     </p>
                   </div>
 
                   <button
                     type="button"
                     onClick={() => setActiveWorkoutDate(selectedDate)}
-                    className="flex items-center gap-2 px-4 sm:px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-extrabold text-xs transition shadow-lg shadow-cyan-500/20 whitespace-nowrap self-stretch sm:self-auto justify-center"
+                    className="flex items-center gap-2 px-4 sm:px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition shadow-sm whitespace-nowrap self-stretch sm:self-auto justify-center active-press"
                   >
                     <Dumbbell className="w-4 h-4 stroke-[2.5]" />
-                    <span>Open {selectedDate} Session</span>
+                    <span>Open Workout Ledger</span>
                   </button>
                 </div>
               </div>
@@ -649,8 +719,8 @@ export default function Home() {
                   workoutLogs={data.workoutLogs}
                   colorTheme="blue"
                   mode="gym"
-                  title="Fitness Workout Activity Matrix"
-                  subtitle="Dedicated training consistency grid showing workout days, splits & volume in blue"
+                  title="Fitness Activity Matrix"
+                  subtitle="Sapphire consistency matrix tracking workouts, weekly volume, and active training days"
                   onSelectDate={(dateISO) => {
                     setSelectedDate(dateISO);
                     setActiveWorkoutDate(dateISO);
@@ -659,7 +729,7 @@ export default function Home() {
               </div>
             )}
 
-            {/* Sub-view 3: Strength Curves (now subsection of fitness) */}
+            {/* Sub-view 3: Strength Curves */}
             {fitnessSubTab === 'curves' && (
               <div className="space-y-6">
                 <ProgressCurves
@@ -683,7 +753,7 @@ export default function Home() {
         )}
       </main>
 
-      {/* Dedicated Day Workout Modal (pops up when selecting a calendar day) */}
+      {/* Dedicated Day Workout Modal */}
       {activeWorkoutDate && (
         <DayWorkoutModal
           dateISO={activeWorkoutDate}
@@ -705,16 +775,55 @@ export default function Home() {
         />
       )}
 
-      {/* Footer */}
-      <footer className="border-t border-slate-800/80 bg-[#090e1a] py-5 sm:py-6 text-center text-xs text-slate-500 mt-auto">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <p>© 2026 VIBE 365. Built for high performers & athletes.</p>
-          <div className="flex items-center gap-4 text-[11px] text-slate-400">
-            <span>Habits & Sub-sets</span>
+      {/* Mobile Floating Bottom Dock */}
+      <div className="fixed bottom-0 inset-x-0 z-40 md:hidden bg-[#090b10]/95 border-t border-[#1c2234] backdrop-blur-xl p-1.5 flex items-center justify-around">
+        <button
+          type="button"
+          onClick={() => setActiveTab('habits')}
+          className={`flex-1 flex flex-col items-center py-2 rounded-xl text-xs font-semibold transition active-press ${
+            activeTab === 'habits' ? 'text-emerald-400 bg-emerald-500/10' : 'text-slate-400'
+          }`}
+        >
+          <CheckCircle2 className="w-4 h-4" />
+          <span className="text-[10px] mt-1 font-mono">Habits</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('fitness')}
+          className={`flex-1 flex flex-col items-center py-2 rounded-xl text-xs font-semibold transition active-press ${
+            activeTab === 'fitness' ? 'text-blue-400 bg-blue-500/10' : 'text-slate-400'
+          }`}
+        >
+          <Dumbbell className="w-4 h-4" />
+          <span className="text-[10px] mt-1 font-mono">Fitness</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('objectives')}
+          className={`flex-1 flex flex-col items-center py-2 rounded-xl text-xs font-semibold transition active-press ${
+            activeTab === 'objectives' ? 'text-amber-400 bg-amber-500/10' : 'text-slate-400'
+          }`}
+        >
+          <Target className="w-4 h-4" />
+          <span className="text-[10px] mt-1 font-mono">Goals</span>
+        </button>
+      </div>
+
+      {/* Technical Footer */}
+      <footer className="border-t border-[#141824] bg-[#07080c] py-5 text-center text-xs text-slate-500 mt-auto hidden md:block">
+        <div className="max-w-7xl mx-auto px-4 flex items-center justify-between text-[11px] font-mono">
+          <div className="flex items-center gap-2 text-slate-400">
+            <span className="w-2 h-2 rounded-full bg-emerald-400" />
+            <span>VIBE 365 LOCAL ENGINE ACTIVE</span>
+          </div>
+          <div className="flex items-center gap-4 text-slate-500">
+            <span>HABITS</span>
             <span>•</span>
-            <span>Blue Fitness Matrix</span>
+            <span>BLUE MATRIX</span>
             <span>•</span>
-            <span>Strength Curves</span>
+            <span>PROGRESSIVE OVERLOAD</span>
           </div>
         </div>
       </footer>

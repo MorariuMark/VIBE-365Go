@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'VIBE 365 | Habit Tracker & IronForge Gym Logger',
-  description: 'Professional habit tracking, consistency matrix, objectives, and progressive overload gym tracker with drop sets.',
+  title: 'VIBE 365 | Performance & Habits OS',
+  description: 'Precision daily habit tracking, dual consistency matrix, multi-horizon objectives, and progressive overload fitness engine with drop sets.',
 };
 
 export default function RootLayout({
@@ -12,8 +12,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
-      <body className="bg-dark-900 text-slate-100 min-h-screen antialiased selection:bg-brand-emerald selection:text-dark-900">
+    <html lang="en" className="dark scroll-smooth">
+      <body className="bg-[#07080c] text-slate-100 min-h-screen antialiased selection:bg-emerald-500 selection:text-black font-sans">
         {children}
       </body>
     </html>

@@ -100,13 +100,14 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
     }
   };
 
-  // Add muscle group to current day
+  // Adding existing muscle group to today's session
   const handleAddExistingGroupToDay = (groupId: string) => {
     if (!activeMuscleGroupIds.includes(groupId)) {
       setActiveMuscleGroupIds([...activeMuscleGroupIds, groupId]);
     }
   };
 
+  // Custom muscle group created by user
   const handleCreateCustomMuscleGroup = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newGroupName.trim()) return;
@@ -200,12 +201,15 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
     setExercises(
       exercises.map((ex) => {
         if (ex.id !== exerciseId) return ex;
-        const target = ex.sets[setIndex];
+        const setToDuplicate = ex.sets[setIndex];
+        if (!setToDuplicate) return ex;
+        const newSetNumber = ex.sets.length + 1;
         const duplicated: GymSet = {
-          ...target,
-          id: `set_${Date.now()}_dup`,
-          setNumber: ex.sets.length + 1,
+          ...setToDuplicate,
+          id: `set_${Date.now()}_${newSetNumber}`,
+          setNumber: newSetNumber,
           completed: false,
+          dropSet: setToDuplicate.dropSet ? { ...setToDuplicate.dropSet } : undefined,
         };
         return { ...ex, sets: [...ex.sets, duplicated] };
       })
@@ -216,10 +220,12 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
     setExercises(
       exercises.map((ex) => {
         if (ex.id !== exerciseId) return ex;
-        const filtered = ex.sets
-          .filter((s) => s.id !== setId)
-          .map((s, idx) => ({ ...s, setNumber: idx + 1 }));
-        return { ...ex, sets: filtered };
+        const filtered = ex.sets.filter((s) => s.id !== setId);
+        const reindexed = filtered.map((s, idx) => ({
+          ...s,
+          setNumber: idx + 1,
+        }));
+        return { ...ex, sets: reindexed };
       })
     );
   };
@@ -282,10 +288,10 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
     if (completed) {
       try {
         confetti({
-          particleCount: 70,
-          spread: 80,
+          particleCount: 60,
+          spread: 70,
           origin: { y: 0.6 },
-          colors: ['#06b6d4', '#10b981', '#f59e0b'],
+          colors: ['#10b981', '#3b82f6', '#f59e0b'],
         });
       } catch {
         // Fallback
@@ -302,26 +308,26 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
       : null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-md overflow-y-auto">
-      <div className="bg-slate-900 border border-slate-800 w-full max-w-4xl rounded-3xl shadow-2xl my-auto overflow-hidden flex flex-col max-h-[92vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto">
+      <div className="bg-[#0b0e17] border border-[#1e2436] w-full max-w-4xl rounded-2xl shadow-2xl my-auto overflow-hidden flex flex-col max-h-[94vh]">
         {/* Top Sticky Header */}
-        <div className="p-5 sm:p-6 border-b border-slate-800/80 bg-slate-900/95 sticky top-0 z-20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="p-4 sm:p-6 border-b border-[#1b2133] bg-[#0d101a]/95 sticky top-0 z-20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex-1 w-full sm:w-auto">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-cyan-400 bg-cyan-500/10 px-2.5 py-1 rounded-full border border-cyan-500/20">
+              <span className="text-[11px] font-mono uppercase tracking-wider text-blue-400 bg-blue-950/60 px-2.5 py-0.5 rounded border border-blue-800/40">
                 {formatDatePretty(dateISO)}
               </span>
               <button
                 type="button"
                 onClick={() => setCompleted(!completed)}
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border transition ${
+                className={`flex items-center gap-1.5 px-3 py-0.5 rounded-md text-xs font-semibold border transition ${
                   completed
-                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
-                    : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
+                    ? 'bg-emerald-950/80 text-emerald-400 border-emerald-800/60'
+                    : 'bg-[#141824] text-slate-400 border-[#232a3e] hover:text-white'
                 }`}
               >
                 <CheckCircle2 className={`w-3.5 h-3.5 ${completed ? 'text-emerald-400' : ''}`} />
-                <span>{completed ? 'Completed' : 'Mark Complete'}</span>
+                <span>{completed ? 'Completed' : 'Mark Done'}</span>
               </button>
             </div>
 
@@ -330,7 +336,7 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Assign Workout Title (e.g. Heavy Push A - PR Day)..."
-              className="mt-2 text-xl sm:text-2xl font-black text-white bg-transparent border-b border-transparent hover:border-slate-700 focus:border-cyan-500 outline-none w-full placeholder:text-slate-600 transition"
+              className="mt-2 text-lg sm:text-2xl font-black text-white bg-transparent border-b border-transparent hover:border-[#232a3e] focus:border-emerald-500 outline-none w-full placeholder:text-slate-600 transition tracking-tight"
             />
           </div>
 
@@ -338,7 +344,7 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
             <button
               type="button"
               onClick={handleSaveAll}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs transition shadow-lg shadow-cyan-500/20"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition shadow-sm active-press"
             >
               <Save className="w-4 h-4" />
               <span>Save Session</span>
@@ -346,7 +352,7 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition"
+              className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-[#141824] transition"
             >
               <X className="w-5 h-5" />
             </button>
@@ -354,22 +360,22 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
         </div>
 
         {/* Scrollable Content Body */}
-        <div className="p-5 sm:p-6 overflow-y-auto space-y-6 flex-1">
+        <div className="p-4 sm:p-6 overflow-y-auto space-y-6 flex-1">
           {/* Split Type Selector */}
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
+            <label className="block text-[10px] font-mono uppercase tracking-wider text-slate-400 mb-2">
               Select Workout Split
             </label>
-            <div className="grid grid-cols-5 gap-2">
+            <div className="flex flex-wrap gap-2">
               {(['push', 'pull', 'legs', 'rest', 'custom'] as SplitType[]).map((split) => (
                 <button
                   key={split}
                   type="button"
                   onClick={() => handleSplitChange(split)}
-                  className={`py-2 px-3 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all ${
+                  className={`py-1.5 px-4 rounded-lg text-xs font-semibold uppercase tracking-wider border transition-all ${
                     splitType === split
-                      ? 'bg-cyan-500/20 border-cyan-500 text-cyan-400 shadow-md shadow-cyan-500/10'
-                      : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'
+                      ? 'bg-[#1b2336] border-[#313e5e] text-white shadow-sm'
+                      : 'bg-[#0e1119] border-[#1b2131] text-slate-400 hover:text-white hover:border-[#2b334c]'
                   }`}
                 >
                   {split}
@@ -379,10 +385,10 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
           </div>
 
           {/* Muscle Groups Active for Today */}
-          <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-4">
+          <div className="bg-[#0e1119] border border-[#1b2131] rounded-xl p-4">
             <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
               <div className="flex items-center gap-2">
-                <Layers className="w-4 h-4 text-cyan-400" />
+                <Layers className="w-4 h-4 text-blue-400" />
                 <span className="text-xs font-bold text-white uppercase tracking-wider">
                   Muscle Groups for Today
                 </span>
@@ -392,7 +398,7 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowAddGroupModal(true)}
-                  className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-400 border border-slate-700 text-xs font-semibold transition"
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#141824] hover:bg-[#1b2234] text-blue-400 border border-[#232a3e] text-xs font-semibold transition"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>Add Muscle Group</span>
@@ -408,7 +414,7 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                 return (
                   <div
                     key={grpId}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-xs text-white font-medium shadow-sm"
+                    className="flex items-center gap-2 px-3 py-1 rounded-lg bg-[#141824] border border-[#232a3e] text-xs text-white font-medium"
                   >
                     <span>{displayName}</span>
                     <button
@@ -424,10 +430,10 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
               })}
             </div>
 
-            {/* Quick Add Available Groups if not yet added */}
+            {/* Quick Add Available Groups */}
             {muscleGroups.filter((g) => !activeMuscleGroupIds.includes(g.id)).length > 0 && (
-              <div className="mt-3 pt-2.5 border-t border-slate-800/50 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400">
-                <span className="text-slate-500">Quick add:</span>
+              <div className="mt-3 pt-2.5 border-t border-[#1b2131] flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400">
+                <span className="text-slate-500 font-mono">Quick add:</span>
                 {muscleGroups
                   .filter((g) => !activeMuscleGroupIds.includes(g.id))
                   .map((g) => (
@@ -435,7 +441,7 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                       key={g.id}
                       type="button"
                       onClick={() => handleAddExistingGroupToDay(g.id)}
-                      className="px-2 py-0.5 rounded-md bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-cyan-400 transition"
+                      className="px-2 py-0.5 rounded bg-[#090b10] border border-[#1b2131] hover:border-[#2b334c] text-slate-300 hover:text-blue-400 transition"
                     >
                       + {g.name}
                     </button>
@@ -447,12 +453,12 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
           {/* Muscle Groups Exercises Section */}
           <div className="space-y-6">
             <div className="flex items-center justify-between">
-              <h4 className="text-sm font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
-                <Dumbbell className="w-4 h-4 text-cyan-400" />
+              <h4 className="text-xs font-mono uppercase tracking-wider text-slate-300 flex items-center gap-2">
+                <Dumbbell className="w-4 h-4 text-blue-400" />
                 Exercise Log & Sets
               </h4>
-              <span className="text-xs text-slate-500">
-                Formula: Weight (kg) × Reps + Drop Set
+              <span className="text-[11px] font-mono text-slate-500">
+                Formula: Weight × Reps + Drop Set
               </span>
             </div>
 
@@ -466,13 +472,13 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
               return (
                 <div
                   key={grpId}
-                  className="bg-slate-950/80 border border-slate-800 rounded-2xl p-4 sm:p-5 space-y-4"
+                  className="bg-[#0e1119] border border-[#1b2131] rounded-xl p-4 sm:p-5 space-y-4"
                 >
                   {/* Muscle Group Title & Sticky Exercises Picker */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#1b2131]">
                     <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
-                      <h5 className="text-base font-bold text-white tracking-wide">
+                      <span className="w-2 h-2 rounded-full bg-blue-400" />
+                      <h5 className="text-sm font-bold text-white tracking-wide uppercase">
                         {groupName}
                       </h5>
                     </div>
@@ -490,7 +496,7 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                             e.target.value = '';
                           }}
                           defaultValue=""
-                          className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-slate-200 focus:outline-none focus:border-cyan-500 cursor-pointer"
+                          className="px-3 py-1.5 rounded-lg bg-[#141824] border border-[#232a3e] text-xs text-slate-200 focus:outline-none focus:border-blue-500 cursor-pointer"
                         >
                           <option value="" disabled>
                             + Choose {groupName} Exercise...
@@ -510,24 +516,24 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                             addingExerciseToGroupId === grpId ? null : grpId
                           )
                         }
-                        className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-400 border border-slate-700 text-xs font-semibold transition"
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#141824] hover:bg-[#1b2234] text-blue-400 border border-[#232a3e] text-xs font-semibold transition"
                       >
                         <Plus className="w-3.5 h-3.5" />
-                        <span>New Sticky Exercise</span>
+                        <span>Sticky Exercise</span>
                       </button>
                     </div>
                   </div>
 
                   {/* Add sticky exercise input field */}
                   {addingExerciseToGroupId === grpId && (
-                    <div className="p-3 rounded-xl bg-slate-900 border border-cyan-500/40 flex items-center gap-2">
-                      <Bookmark className="w-4 h-4 text-cyan-400 flex-shrink-0" />
+                    <div className="p-3 rounded-lg bg-[#141824] border border-blue-500/40 flex items-center gap-2">
+                      <Bookmark className="w-4 h-4 text-blue-400 flex-shrink-0" />
                       <input
                         type="text"
                         value={newExerciseName}
                         onChange={(e) => setNewExerciseName(e.target.value)}
-                        placeholder={`New exercise name for ${groupName} (sticks forever)...`}
-                        className="flex-1 px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-cyan-500"
+                        placeholder={`New exercise name for ${groupName} (sticks to library)...`}
+                        className="flex-1 px-3 py-1.5 rounded-md bg-[#090b10] border border-[#232a3e] text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500"
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
                             e.preventDefault();
@@ -538,49 +544,47 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                       <button
                         type="button"
                         onClick={() => handleCreateStickyExercise(grpId)}
-                        className="px-3 py-1.5 rounded-lg bg-cyan-500 text-slate-950 text-xs font-bold hover:bg-cyan-400 transition"
+                        className="px-3 py-1.5 rounded-md bg-emerald-500 text-slate-950 text-xs font-bold hover:bg-emerald-400 transition"
                       >
-                        Save & Add
+                        Save
                       </button>
                       <button
                         type="button"
                         onClick={() => setAddingExerciseToGroupId(null)}
-                        className="p-1.5 text-slate-400 hover:text-white"
+                        className="p-1 text-slate-400 hover:text-white"
                       >
                         <X className="w-4 h-4" />
                       </button>
                     </div>
                   )}
 
-                  {/* Logged exercises list under this muscle group */}
+                  {/* Logged exercises list */}
                   <div className="space-y-4">
                     {groupLoggedExercises.map((loggedEx) => (
                       <div
                         key={loggedEx.id}
-                        className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-3"
+                        className="bg-[#090b10] border border-[#1b2131] rounded-xl p-3.5 sm:p-4 space-y-3"
                       >
                         {/* Exercise Title Bar */}
                         <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-bold text-white">
-                              {loggedEx.exerciseName}
-                            </span>
-                          </div>
+                          <span className="text-sm font-bold text-white">
+                            {loggedEx.exerciseName}
+                          </span>
 
                           <button
                             type="button"
                             onClick={() => handleRemoveExerciseFromWorkout(loggedEx.id)}
-                            className="p-1 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition"
+                            className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition"
                             title="Remove exercise"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
 
-                        {/* Sets Table - Responsive */}
+                        {/* Sets Table */}
                         <div className="space-y-2">
-                          {/* Desktop Column Header */}
-                          <div className="hidden sm:grid grid-cols-12 text-[11px] font-bold text-slate-400 uppercase tracking-wider px-2">
+                          {/* Desktop Header */}
+                          <div className="hidden sm:grid grid-cols-12 text-[10px] font-mono text-slate-400 uppercase tracking-wider px-2">
                             <span className="col-span-1">Set</span>
                             <span className="col-span-3">Weight (kg)</span>
                             <span className="col-span-2">Reps</span>
@@ -591,15 +595,15 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                           {loggedEx.sets.map((set, setIdx) => (
                             <div
                               key={set.id}
-                              className={`p-3 sm:p-2 rounded-xl border transition ${
+                              className={`p-2.5 rounded-lg border transition ${
                                 set.completed
-                                  ? 'bg-emerald-950/25 border-emerald-800/40'
-                                  : 'bg-slate-950/60 border-slate-800'
+                                  ? 'bg-emerald-950/20 border-emerald-800/40'
+                                  : 'bg-[#10141f] border-[#1b2131]'
                               }`}
                             >
                               {/* Desktop Grid Layout */}
                               <div className="hidden sm:grid grid-cols-12 items-center gap-2">
-                                <div className="col-span-1 font-bold text-xs text-slate-300">
+                                <div className="col-span-1 font-mono font-bold text-xs text-slate-300">
                                   #{set.setNumber}
                                 </div>
                                 <div className="col-span-3 flex items-center gap-1">
@@ -613,9 +617,9 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                                         weightKg: parseFloat(e.target.value) || 0,
                                       })
                                     }
-                                    className="w-full px-2 py-1 rounded-lg bg-slate-900 border border-slate-700 text-xs font-bold text-white focus:outline-none focus:border-cyan-500"
+                                    className="w-full px-2 py-1 rounded bg-[#090b10] border border-[#232a3e] text-xs font-mono font-bold text-white focus:outline-none focus:border-blue-500"
                                   />
-                                  <span className="text-[10px] text-slate-500 font-semibold">kg</span>
+                                  <span className="text-[10px] font-mono text-slate-500">kg</span>
                                 </div>
                                 <div className="col-span-2 flex items-center gap-1">
                                   <input
@@ -627,14 +631,14 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                                         reps: parseInt(e.target.value, 10) || 0,
                                       })
                                     }
-                                    className="w-full px-2 py-1 rounded-lg bg-slate-900 border border-slate-700 text-xs font-bold text-white focus:outline-none focus:border-cyan-500"
+                                    className="w-full px-2 py-1 rounded bg-[#090b10] border border-[#232a3e] text-xs font-mono font-bold text-white focus:outline-none focus:border-blue-500"
                                   />
-                                  <span className="text-[10px] text-slate-500 font-semibold">reps</span>
+                                  <span className="text-[10px] font-mono text-slate-500">reps</span>
                                 </div>
                                 <div className="col-span-4">
                                   {set.isDropSet && set.dropSet ? (
                                     <div className="flex items-center gap-1">
-                                      <span className="text-amber-400 font-bold text-xs">+</span>
+                                      <span className="text-amber-400 font-bold text-xs font-mono">+</span>
                                       <input
                                         type="number"
                                         step="any"
@@ -649,9 +653,9 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                                             },
                                           })
                                         }
-                                        className="w-14 px-1.5 py-1 rounded-lg bg-slate-900 border border-amber-500/50 text-xs font-bold text-amber-300 focus:outline-none"
+                                        className="w-14 px-1.5 py-1 rounded bg-[#090b10] border border-amber-500/50 text-xs font-mono font-bold text-amber-300 focus:outline-none"
                                       />
-                                      <span className="text-[10px] text-slate-500">kg ×</span>
+                                      <span className="text-[10px] font-mono text-slate-500">kg ×</span>
                                       <input
                                         type="number"
                                         min="0"
@@ -665,7 +669,7 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                                             },
                                           })
                                         }
-                                        className="w-12 px-1.5 py-1 rounded-lg bg-slate-900 border border-amber-500/50 text-xs font-bold text-amber-300 focus:outline-none"
+                                        className="w-12 px-1.5 py-1 rounded bg-[#090b10] border border-amber-500/50 text-xs font-mono font-bold text-amber-300 focus:outline-none"
                                       />
                                       <button
                                         type="button"
@@ -680,7 +684,7 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                                     <button
                                       type="button"
                                       onClick={() => handleToggleDropSet(loggedEx.id, set.id)}
-                                      className="text-[11px] font-semibold text-slate-400 hover:text-amber-400 transition flex items-center gap-1"
+                                      className="text-[11px] font-mono text-slate-400 hover:text-amber-400 transition flex items-center gap-1"
                                     >
                                       <Plus className="w-3 h-3" />
                                       <span>Add Drop Set</span>
@@ -694,7 +698,7 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                                     className="p-1 rounded text-slate-500 hover:text-white"
                                     title="Duplicate set"
                                   >
-                                    <Copy className="w-3 h-3" />
+                                    <Copy className="w-3.5 h-3.5" />
                                   </button>
                                   <button
                                     type="button"
@@ -702,7 +706,7 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                                     className="p-1 rounded text-slate-500 hover:text-rose-400"
                                     title="Delete set"
                                   >
-                                    <Trash2 className="w-3 h-3" />
+                                    <Trash2 className="w-3.5 h-3.5" />
                                   </button>
                                   <button
                                     type="button"
@@ -711,10 +715,10 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                                         completed: !set.completed,
                                       })
                                     }
-                                    className={`w-6 h-6 rounded-lg flex items-center justify-center border transition ${
+                                    className={`w-6 h-6 rounded flex items-center justify-center border transition ${
                                       set.completed
                                         ? 'bg-emerald-500 border-emerald-400 text-slate-950'
-                                        : 'bg-slate-800 border-slate-700 text-transparent hover:border-emerald-500'
+                                        : 'bg-[#141824] border-[#232a3e] text-transparent hover:border-emerald-500'
                                     }`}
                                   >
                                     <Check className="w-3.5 h-3.5 stroke-[3]" />
@@ -723,15 +727,16 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                               </div>
 
                               {/* Mobile Stacked Layout */}
-                              <div className="sm:hidden space-y-2">
+                              <div className="sm:hidden space-y-2.5">
                                 <div className="flex items-center justify-between">
-                                  <span className="font-bold text-xs text-white">Set #{set.setNumber}</span>
+                                  <span className="font-mono font-bold text-xs text-white">
+                                    Set #{set.setNumber}
+                                  </span>
                                   <div className="flex items-center gap-2">
                                     <button
                                       type="button"
                                       onClick={() => handleDuplicateSet(loggedEx.id, setIdx)}
                                       className="p-1 text-slate-400 hover:text-white"
-                                      title="Duplicate set"
                                     >
                                       <Copy className="w-3.5 h-3.5" />
                                     </button>
@@ -739,7 +744,6 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                                       type="button"
                                       onClick={() => handleDeleteSet(loggedEx.id, set.id)}
                                       className="p-1 text-slate-400 hover:text-rose-400"
-                                      title="Delete set"
                                     >
                                       <Trash2 className="w-3.5 h-3.5" />
                                     </button>
@@ -750,21 +754,23 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                                           completed: !set.completed,
                                         })
                                       }
-                                      className={`px-2.5 py-1 rounded-lg text-xs font-bold border flex items-center gap-1 ${
+                                      className={`px-3 py-1 rounded text-xs font-mono font-bold border flex items-center gap-1 ${
                                         set.completed
                                           ? 'bg-emerald-500 text-slate-950 border-emerald-400'
-                                          : 'bg-slate-800 text-slate-400 border-slate-700'
+                                          : 'bg-[#141824] text-slate-400 border-[#232a3e]'
                                       }`}
                                     >
                                       <Check className="w-3 h-3" />
-                                      <span>{set.completed ? 'Done' : 'Mark'}</span>
+                                      <span>{set.completed ? 'DONE' : 'MARK'}</span>
                                     </button>
                                   </div>
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-2">
                                   <div>
-                                    <label className="block text-[10px] text-slate-400 mb-0.5">Weight (kg)</label>
+                                    <label className="block text-[10px] font-mono text-slate-400 mb-0.5">
+                                      Weight (kg)
+                                    </label>
                                     <input
                                       type="number"
                                       step="any"
@@ -775,11 +781,13 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                                           weightKg: parseFloat(e.target.value) || 0,
                                         })
                                       }
-                                      className="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs font-bold text-white"
+                                      className="w-full px-2.5 py-1.5 rounded bg-[#090b10] border border-[#232a3e] text-xs font-mono font-bold text-white"
                                     />
                                   </div>
                                   <div>
-                                    <label className="block text-[10px] text-slate-400 mb-0.5">Reps</label>
+                                    <label className="block text-[10px] font-mono text-slate-400 mb-0.5">
+                                      Reps
+                                    </label>
                                     <input
                                       type="number"
                                       min="0"
@@ -789,7 +797,7 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                                           reps: parseInt(e.target.value, 10) || 0,
                                         })
                                       }
-                                      className="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs font-bold text-white"
+                                      className="w-full px-2.5 py-1.5 rounded bg-[#090b10] border border-[#232a3e] text-xs font-mono font-bold text-white"
                                     />
                                   </div>
                                 </div>
@@ -797,8 +805,8 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                                 {/* Drop Set on Mobile */}
                                 <div className="pt-1">
                                   {set.isDropSet && set.dropSet ? (
-                                    <div className="bg-slate-900 p-2 rounded-lg border border-amber-500/40 flex items-center justify-between gap-2">
-                                      <div className="flex items-center gap-1.5 text-xs">
+                                    <div className="bg-[#090b10] p-2 rounded border border-amber-500/40 flex items-center justify-between gap-2">
+                                      <div className="flex items-center gap-1.5 text-xs font-mono">
                                         <span className="text-amber-400 font-bold">Drop:</span>
                                         <input
                                           type="number"
@@ -813,7 +821,7 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                                               },
                                             })
                                           }
-                                          className="w-14 px-1.5 py-1 rounded bg-slate-950 border border-amber-500/50 text-xs font-bold text-amber-300"
+                                          className="w-14 px-1.5 py-1 rounded bg-[#141824] border border-amber-500/50 text-xs font-mono font-bold text-amber-300"
                                         />
                                         <span className="text-slate-400">kg ×</span>
                                         <input
@@ -828,7 +836,7 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                                               },
                                             })
                                           }
-                                          className="w-12 px-1.5 py-1 rounded bg-slate-950 border border-amber-500/50 text-xs font-bold text-amber-300"
+                                          className="w-12 px-1.5 py-1 rounded bg-[#141824] border border-amber-500/50 text-xs font-mono font-bold text-amber-300"
                                         />
                                       </div>
                                       <button
@@ -843,7 +851,7 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                                     <button
                                       type="button"
                                       onClick={() => handleToggleDropSet(loggedEx.id, set.id)}
-                                      className="text-xs text-amber-400 hover:underline flex items-center gap-1"
+                                      className="text-xs font-mono text-amber-400 hover:underline flex items-center gap-1"
                                     >
                                       <Plus className="w-3 h-3" />
                                       <span>Add Drop Set</span>
@@ -854,9 +862,9 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                             </div>
                           ))}
 
-                          {/* Formula Preview string */}
-                          <div className="mt-1 px-2 text-[11px] text-slate-400 font-mono">
-                            <span className="text-slate-500">Formula preview: </span>
+                          {/* Formula Preview */}
+                          <div className="mt-1 px-1 text-[10px] text-slate-400 font-mono">
+                            <span className="text-slate-500">Formula: </span>
                             {loggedEx.sets.map((s, i) => (
                               <span key={s.id}>
                                 {i > 0 ? ' | ' : ''}
@@ -874,13 +882,13 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                           </div>
 
                           {/* Add Set button */}
-                          <div className="pt-2 flex items-center justify-between">
+                          <div className="pt-2">
                             <button
                               type="button"
                               onClick={() => handleAddSet(loggedEx.id)}
-                              className="flex items-center gap-1 text-xs font-bold text-cyan-400 hover:text-cyan-300 transition px-2 py-1 rounded-lg hover:bg-slate-800"
+                              className="flex items-center gap-1 text-xs font-mono font-bold text-blue-400 hover:text-blue-300 transition px-2.5 py-1 rounded bg-[#141824] border border-[#232a3e]"
                             >
-                              <Plus className="w-3.5 h-3.5" />
+                              <Plus className="w-3 h-3" />
                               <span>Add Set</span>
                             </button>
                           </div>
@@ -889,12 +897,12 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                     ))}
 
                     {groupLoggedExercises.length === 0 && (
-                      <div className="text-center py-6 border border-dashed border-slate-800 rounded-xl">
+                      <div className="text-center py-6 border border-dashed border-[#1b2131] rounded-lg">
                         <p className="text-xs text-slate-500">
                           No exercises added for {groupName} today.
                         </p>
-                        <span className="text-[11px] text-cyan-400 mt-1 inline-block">
-                          Select from the dropdown above or add a new sticky exercise.
+                        <span className="text-[11px] font-mono text-blue-400 mt-1 inline-block">
+                          Select from dropdown above or create sticky exercise.
                         </span>
                       </div>
                     )}
@@ -904,11 +912,11 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
             })}
           </div>
 
-          {/* Day Notes & Reflections */}
-          <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-4 space-y-2">
+          {/* Day Notes */}
+          <div className="bg-[#0e1119] border border-[#1b2131] rounded-xl p-4 space-y-2">
             <div className="flex items-center gap-2">
-              <FileText className="w-4 h-4 text-cyan-400" />
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-300">
+              <FileText className="w-4 h-4 text-blue-400" />
+              <label className="text-xs font-mono uppercase tracking-wider text-slate-300">
                 Session Notes & Intensity Reflections
               </label>
             </div>
@@ -917,26 +925,26 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="e.g. High energy, good pump on incline press, warm-up took 8 min..."
-              className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-cyan-500"
+              className="w-full px-3 py-2 rounded-lg bg-[#090b10] border border-[#232a3e] text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500"
             />
           </div>
 
-          {/* Daily Body Weight Tracker Section (at end of each day) */}
-          <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 border border-amber-500/30 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          {/* Daily Body Weight Tracker */}
+          <div className="bg-[#0e1119] border border-amber-500/30 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400">
-                <Scale className="w-6 h-6" />
+              <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400">
+                <Scale className="w-5 h-5" />
               </div>
               <div>
-                <h5 className="text-sm font-bold text-white">Daily Body Weight Entry</h5>
+                <h5 className="text-sm font-bold text-white">Daily Body Weight</h5>
                 <p className="text-xs text-slate-400">
-                  Track morning or post-workout body weight for body composition insights
+                  Track body weight at end of session for body composition delta
                 </p>
               </div>
             </div>
 
             <div className="flex items-center gap-3 w-full sm:w-auto">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
                 <input
                   type="number"
                   step="0.1"
@@ -945,14 +953,14 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                   placeholder="e.g. 79.4"
                   value={bodyWeightKg}
                   onChange={(e) => setBodyWeightKg(e.target.value)}
-                  className="w-28 px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-base font-bold text-amber-300 focus:outline-none focus:border-amber-500"
+                  className="w-24 px-2.5 py-1.5 rounded-lg bg-[#090b10] border border-[#232a3e] text-sm font-mono font-bold text-amber-300 focus:outline-none focus:border-amber-500"
                 />
-                <span className="text-xs font-bold text-slate-400">kg</span>
+                <span className="text-xs font-mono text-slate-400">kg</span>
               </div>
 
               {weightDiff !== null && (
                 <div
-                  className={`text-xs font-bold px-2.5 py-1 rounded-lg border ${
+                  className={`text-xs font-mono font-bold px-2.5 py-1 rounded border ${
                     parseFloat(weightDiff) >= 0
                       ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
                       : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
@@ -966,18 +974,18 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
         </div>
 
         {/* Bottom Actions Bar */}
-        <div className="p-4 sm:p-5 border-t border-slate-800 bg-slate-900/95 flex items-center justify-between">
+        <div className="p-4 border-t border-[#1b2131] bg-[#0d101a] flex items-center justify-between">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700 transition"
+            className="px-4 py-2 rounded-lg bg-[#141824] text-slate-300 text-xs font-semibold hover:bg-[#1b2234] transition"
           >
             Cancel
           </button>
           <button
             type="button"
             onClick={handleSaveAll}
-            className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-black uppercase tracking-wider transition shadow-lg shadow-cyan-500/20"
+            className="flex items-center gap-2 px-6 py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold uppercase tracking-wider transition shadow-sm active-press"
           >
             <Save className="w-4 h-4" />
             <span>Save & Complete Session</span>
@@ -987,7 +995,7 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
         {/* Add Muscle Group Modal */}
         {showAddGroupModal && (
           <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 w-full max-w-md shadow-2xl relative">
+            <div className="bg-[#0e1119] border border-[#1b2131] rounded-xl p-5 w-full max-w-md shadow-2xl relative">
               <button
                 type="button"
                 onClick={() => setShowAddGroupModal(false)}
@@ -996,8 +1004,8 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                 <X className="w-5 h-5" />
               </button>
 
-              <h4 className="text-base font-bold text-white mb-3 flex items-center gap-2">
-                <Layers className="w-4 h-4 text-cyan-400" />
+              <h4 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
+                <Layers className="w-4 h-4 text-blue-400" />
                 Add Muscle Group
               </h4>
 
@@ -1012,7 +1020,7 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                     value={newGroupName}
                     onChange={(e) => setNewGroupName(e.target.value)}
                     placeholder="e.g. Forearms, Traps, Glutes, Calves..."
-                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-cyan-500"
+                    className="w-full px-3 py-2 rounded-lg bg-[#090b10] border border-[#232a3e] text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500"
                   />
                 </div>
 
@@ -1026,7 +1034,7 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                         type="radio"
                         checked={isGroupPermanent}
                         onChange={() => setIsGroupPermanent(true)}
-                        className="accent-cyan-500"
+                        className="accent-emerald-500"
                       />
                       <span>Permanent (saved in muscle group library)</span>
                     </label>
@@ -1037,7 +1045,7 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                         type="radio"
                         checked={!isGroupPermanent}
                         onChange={() => setIsGroupPermanent(false)}
-                        className="accent-cyan-500"
+                        className="accent-emerald-500"
                       />
                       <span>For today only</span>
                     </label>
@@ -1048,13 +1056,13 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setShowAddGroupModal(false)}
-                    className="px-3 py-1.5 rounded-lg bg-slate-800 text-xs text-slate-300 hover:bg-slate-700"
+                    className="px-3 py-1.5 rounded-lg bg-[#141824] text-xs text-slate-300 hover:bg-[#1b2234]"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold"
+                    className="px-4 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold"
                   >
                     Add Group
                   </button>

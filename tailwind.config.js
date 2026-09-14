@@ -9,35 +9,36 @@ module.exports = {
   theme: {
     extend: {
       colors: {
+        canvas: '#07080c',
         surface: {
-          base: '#090a0f',
-          1: '#10131c',
-          2: '#161a26',
-          3: '#1e2333',
-          border: '#23293d',
-          borderHover: '#333b54',
+          base: '#07080c',
+          1: '#0d0f16',
+          2: '#131622',
+          3: '#1a1e2e',
+          border: '#1c2132',
+          borderHover: '#2b334c',
         },
         brand: {
           emerald: '#10b981',
           emeraldDark: '#064e3b',
           blue: '#3b82f6',
-          blueDark: '#1e3a8a',
+          blueDark: '#1d4ed8',
           amber: '#f59e0b',
           rose: '#f43f5e',
+          violet: '#8b5cf6',
         },
       },
       fontFamily: {
         sans: [
-          'Inter',
+          '"Plus Jakarta Sans"',
           '-apple-system',
           'BlinkMacSystemFont',
           '"Segoe UI"',
           'Roboto',
-          '"Helvetica Neue"',
-          'Arial',
           'sans-serif',
         ],
         mono: [
+          '"JetBrains Mono"',
           'ui-monospace',
           'SFMono-Regular',
           'Menlo',
@@ -45,6 +46,10 @@ module.exports = {
           'Consolas',
           'monospace',
         ],
+      },
+      boxShadow: {
+        'glow-emerald': '0 0 20px -5px rgba(16, 185, 129, 0.3)',
+        'glow-blue': '0 0 20px -5px rgba(59, 130, 246, 0.3)',
       },
     },
   },

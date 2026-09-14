@@ -1,62 +1,92 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    --bg-base: #090a0f;
-    --text-primary: #f1f5f9;
-    --text-muted: #8492a6;
+    --bg-canvas: #07080c;
+    --bg-surface-1: #0d0f16;
+    --bg-surface-2: #131622;
+    --bg-surface-3: #1a1e2e;
+    --border-subtle: #1c2132;
+    --border-hover: #2b334c;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
   }
 
   body {
     color: var(--text-primary);
-    background-color: var(--bg-base);
+    background-color: var(--bg-canvas);
     min-height: 100vh;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     overflow-x: hidden;
   }
 
-  /* Tabular numbers for clean numeric alignment */
+  /* Numeric figures */
   .tabular-nums {
     font-variant-numeric: tabular-nums;
   }
+  
+  .font-numeric {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+  }
 
-  /* Smooth focus states for accessibility */
+  /* Accessibility focus ring */
   *:focus-visible {
     outline: none;
-    box-shadow: 0 0 0 2px #3b82f6;
+    box-shadow: 0 0 0 2px #10b981, 0 0 0 4px rgba(16, 185, 129, 0.2);
   }
 }
 
-/* Subtle modern scrollbar */
+/* Custom sleek scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #090a0f;
+  background: #07080c;
 }
 ::-webkit-scrollbar-thumb {
-  background: #23293d;
+  background: #1c2132;
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #333b54;
+  background: #2b334c;
 }
 
-/* Crisp grid cell transitions */
-.contrib-cell {
-  transition: transform 0.12s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.15s ease;
+/* Smooth micro-interactions */
+.active-press {
+  transition: transform 0.1s ease;
 }
-.contrib-cell:hover {
-  transform: scale(1.22);
-  z-index: 20;
-}
-
-/* Micro-interaction tap effect for mobile buttons */
 .active-press:active {
   transform: scale(0.97);
+}
+
+/* Custom Grid Cell Styling */
+.contrib-cell {
+  transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.15s ease;
+}
+.contrib-cell:hover {
+  transform: scale(1.25);
+  z-index: 30;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
+}
+
+/* Card subtle gradient highlight */
+.athletic-card {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.02) 0%, rgba(255, 255, 255, 0) 100%), #0d0f16;
+  border: 1px solid #1c2132;
+  box-shadow: 0 4px 20px -4px rgba(0, 0, 0, 0.5);
+}
+
+.athletic-card-elevated {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0) 100%), #131622;
+  border: 1px solid #232a3e;
+  box-shadow: 0 8px 30px -6px rgba(0, 0, 0, 0.6);
 }
