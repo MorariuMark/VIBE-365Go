@@ -227,6 +227,11 @@ export const CreateBreakerModal: React.FC<CreateBreakerModalProps> = ({
                   onChange={(e) => setStartingAllowance(parseFloat(e.target.value) || 1)}
                   className="w-full px-3 py-1.5 rounded-lg bg-[#0e1119] border border-[#1b2131] text-xs font-mono font-bold text-white"
                 />
+                {metricUnit.toLowerCase().includes('h') && (
+                  <div className="text-[10px] text-rose-400 font-mono mt-1">
+                    ≈ {Math.floor(startingAllowance)}h {Math.round((startingAllowance % 1) * 60)}m / day ceiling
+                  </div>
+                )}
               </div>
             </div>
           )}

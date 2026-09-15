@@ -527,7 +527,9 @@ export default function Home() {
     dateISO: string,
     executed: boolean,
     metricValue?: number,
-    notes?: string
+    notes?: string,
+    metricHours?: number,
+    metricMinutes?: number
   ) => {
     updateData((prev) => {
       let breakerTitle = '';
@@ -542,6 +544,8 @@ export default function Home() {
             dateISO,
             executed: true,
             metricValue,
+            metricHours,
+            metricMinutes,
             notes,
             loggedAt: new Date().toISOString(),
           };
@@ -550,15 +554,19 @@ export default function Home() {
       });
 
       const next = { ...prev, habitBreakers };
+      const timeDetail =
+        metricHours !== undefined || metricMinutes !== undefined
+          ? ` (${metricHours || 0}h ${metricMinutes || 0}m)`
+          : metricValue !== undefined
+          ? ` (Value: ${metricValue})`
+          : '';
       return recordAction(
         next,
         'breaker_log',
         breakerId,
         breakerTitle || 'Habit Breaker',
         executed
-          ? `Logged execution for "${breakerTitle}" on ${dateISO}${
-              metricValue !== undefined ? ` (Value: ${metricValue})` : ''
-            }`
+          ? `Logged execution for "${breakerTitle}" on ${dateISO}${timeDetail}`
           : `Marked "${breakerTitle}" clean on ${dateISO}`
       );
     });

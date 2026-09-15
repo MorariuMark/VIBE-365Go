@@ -21,7 +21,9 @@ interface HabitBreakerBoardProps {
     dateISO: string,
     executed: boolean,
     metricValue?: number,
-    notes?: string
+    notes?: string,
+    metricHours?: number,
+    metricMinutes?: number
   ) => void;
   onCreateBreaker: (
     newBreaker: Omit<HabitBreaker, 'id' | 'createdAt' | 'logs'>

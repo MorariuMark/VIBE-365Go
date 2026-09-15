@@ -146,7 +146,9 @@ export interface MonthlyAllowancePlan {
 export interface HabitBreakerLogEntry {
   dateISO: string; // "YYYY-MM-DD"
   executed: boolean; // Did perform the bad habit on this day
-  metricValue?: number; // Optional quantitative value (e.g. 3.5 hrs screen time, 10 cigarettes)
+  metricValue?: number; // Quantitative float value (e.g. 2.33 hrs screen time, 10 cigarettes)
+  metricHours?: number; // Exact hours (e.g. 2)
+  metricMinutes?: number; // Exact minutes (e.g. 20)
   notes?: string;
   loggedAt: string; // Exact ISO timestamp when log was recorded
 }

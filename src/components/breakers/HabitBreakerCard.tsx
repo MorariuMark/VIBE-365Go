@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { HabitBreaker, HabitBreakerLogEntry } from '@/types';
+import { CylinderTimePicker } from '@/components/common/CylinderTimePicker';
 import {
   ShieldAlert,
   Flame,
@@ -14,8 +15,10 @@ import {
   Clock,
   TrendingDown,
   Info,
+  Check,
+  RotateCcw,
 } from 'lucide-react';
-import { getTodayISO } from '@/lib/utils';
+import { getTodayISO, formatDatePretty } from '@/lib/utils';
 
 interface HabitBreakerCardProps {
   breaker: HabitBreaker;
@@ -25,7 +28,9 @@ interface HabitBreakerCardProps {
     dateISO: string,
     executed: boolean,
     metricValue?: number,
-    notes?: string
+    notes?: string,
+    metricHours?: number,
+    metricMinutes?: number
   ) => void;
   onDeleteBreaker: (breakerId: string) => void;
 }
@@ -36,10 +41,17 @@ export const HabitBreakerCard: React.FC<HabitBreakerCardProps> = ({
   onLogExecution,
   onDeleteBreaker,
 }) => {
-  const [activeMonthOffset, setActiveMonthOffset] = useState<number>(0);
-  const [editingDay, setEditingDay] = useState<string | null>(null);
-  const [metricInputValue, setMetricInputValue] = useState<string>('');
-  const [dayNotes, setDayNotes] = useState<string>('');
+  const [activeDayModal, setActiveDayModal] = useState<{
+    isOpen: boolean;
+    dateISO: string;
+    action: 'add_frequency' | 'remove_frequency' | 'log_metric';
+  } | null>(null);
+
+  // Time picker state for metric mode
+  const [selectedHours, setSelectedHours] = useState<number>(2);
+  const [selectedMinutes, setSelectedMinutes] = useState<number>(20);
+  const [selectedFloatVal, setSelectedFloatVal] = useState<number>(2.33);
+  const [modalNotes, setModalNotes] = useState<string>('');
 
   const today = getTodayISO();
 
@@ -59,9 +71,8 @@ export const HabitBreakerCard: React.FC<HabitBreakerCardProps> = ({
 
   // Compute executions and metrics for the current calendar month
   const targetYear = targetDate.getFullYear();
-  const targetMonth = targetDate.getMonth(); // 0-indexed
+  const targetMonth = targetDate.getMonth();
 
-  // Days in month
   const daysInMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
   const monthDays = Array.from({ length: daysInMonth }, (_, i) => {
     const dayNum = i + 1;
@@ -70,18 +81,16 @@ export const HabitBreakerCard: React.FC<HabitBreakerCardProps> = ({
     return `${targetYear}-${monthStr}-${dayStr}`;
   });
 
-  // Calculate executed days in this month
   const executedDaysThisMonth = monthDays.filter(
     (iso) => breaker.logs[iso] && breaker.logs[iso].executed
   );
   const executionCount = executedDaysThisMonth.length;
 
-  // Allowance math
   const allowanceRemaining = Math.max(0, currentMonthTarget - executionCount);
   const isOverLimit = executionCount > currentMonthTarget;
   const excessBreaches = isOverLimit ? executionCount - currentMonthTarget : 0;
 
-  // Clean streak (consecutive days without execution leading up to selectedDate)
+  // Clean streak (consecutive clean days leading up to selectedDate)
   const cleanStreak = React.useMemo(() => {
     let streak = 0;
     const cur = new Date(selectedDate);
@@ -98,26 +107,85 @@ export const HabitBreakerCard: React.FC<HabitBreakerCardProps> = ({
     return Math.max(0, streak - 1);
   }, [breaker.logs, selectedDate]);
 
-  // Today log entry
-  const todayEntry = breaker.logs[selectedDate];
-
-  const handleToggleDayExecution = (iso: string) => {
+  // Click handler on calendar day
+  const handleDayClick = (iso: string) => {
     const existing = breaker.logs[iso];
-    if (existing && existing.executed) {
-      // Toggle off
-      onLogExecution(breaker.id, iso, false);
+
+    if (breaker.trackingType === 'metric') {
+      const h = existing?.metricHours !== undefined ? existing.metricHours : existing?.metricValue ? Math.floor(existing.metricValue) : 2;
+      const m = existing?.metricMinutes !== undefined ? existing.metricMinutes : existing?.metricValue ? Math.round((existing.metricValue % 1) * 60) : 20;
+      setSelectedHours(h);
+      setSelectedMinutes(m);
+      setSelectedFloatVal(existing?.metricValue !== undefined ? existing.metricValue : parseFloat((h + m / 60).toFixed(2)));
+      setModalNotes(existing?.notes || '');
+      setActiveDayModal({
+        isOpen: true,
+        dateISO: iso,
+        action: 'log_metric',
+      });
     } else {
-      // Toggle on
-      onLogExecution(breaker.id, iso, true, undefined, 'Performed habit');
+      if (existing && existing.executed) {
+        // Confirmation to remove
+        setActiveDayModal({
+          isOpen: true,
+          dateISO: iso,
+          action: 'remove_frequency',
+        });
+      } else {
+        // Confirmation to add
+        setActiveDayModal({
+          isOpen: true,
+          dateISO: iso,
+          action: 'add_frequency',
+        });
+      }
     }
   };
 
-  const handleSaveDayMetric = (iso: string) => {
-    const val = metricInputValue ? parseFloat(metricInputValue) : undefined;
-    onLogExecution(breaker.id, iso, true, val, dayNotes);
-    setEditingDay(null);
-    setMetricInputValue('');
-    setDayNotes('');
+  const handleConfirmAction = () => {
+    if (!activeDayModal) return;
+
+    if (activeDayModal.action === 'add_frequency') {
+      onLogExecution(breaker.id, activeDayModal.dateISO, true, undefined, modalNotes);
+    } else if (activeDayModal.action === 'remove_frequency') {
+      onLogExecution(breaker.id, activeDayModal.dateISO, false);
+    } else if (activeDayModal.action === 'log_metric') {
+      onLogExecution(
+        breaker.id,
+        activeDayModal.dateISO,
+        true,
+        selectedFloatVal,
+        modalNotes,
+        selectedHours,
+        selectedMinutes
+      );
+    }
+
+    setActiveDayModal(null);
+    setModalNotes('');
+  };
+
+  const handleRemoveMetricEntry = () => {
+    if (!activeDayModal) return;
+    setActiveDayModal({
+      isOpen: true,
+      dateISO: activeDayModal.dateISO,
+      action: 'remove_frequency',
+    });
+  };
+
+  const formatEntryTime = (entry: HabitBreakerLogEntry) => {
+    if (entry.metricHours !== undefined || entry.metricMinutes !== undefined) {
+      const h = entry.metricHours || 0;
+      const m = entry.metricMinutes || 0;
+      return `${h}h ${m}m`;
+    }
+    if (entry.metricValue !== undefined) {
+      const h = Math.floor(entry.metricValue);
+      const m = Math.round((entry.metricValue % 1) * 60);
+      return m > 0 ? `${h}h ${m}m` : `${entry.metricValue}h`;
+    }
+    return 'Logged';
   };
 
   return (
@@ -142,7 +210,7 @@ export const HabitBreakerCard: React.FC<HabitBreakerCardProps> = ({
                 {breaker.title}
               </h3>
               <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-[#141824] text-slate-300 border border-[#232a3e]">
-                {breaker.trackingType === 'frequency' ? 'Days Allowance' : `Daily ${breaker.metricUnit || 'Metric'}`}
+                {breaker.trackingType === 'frequency' ? 'Days Allowance' : `Daily Hours & Minutes`}
               </span>
               <span className="text-[10px] font-mono capitalize px-2 py-0.5 rounded bg-[#141824] text-slate-400 border border-[#232a3e]">
                 {breaker.aggressiveness} Taper
@@ -182,7 +250,7 @@ export const HabitBreakerCard: React.FC<HabitBreakerCardProps> = ({
               Month {currentMonthIndex} of {breaker.durationMonths}
             </span>
             <span className="text-slate-500 font-mono">
-              (Target: ≤ {currentMonthTarget} {breaker.trackingType === 'frequency' ? 'days' : `${breaker.metricUnit || ''}/day`})
+              (Target: ≤ {currentMonthTarget} {breaker.trackingType === 'frequency' ? 'days' : `${breaker.metricUnit || 'hrs'}/day`})
             </span>
           </div>
 
@@ -200,7 +268,7 @@ export const HabitBreakerCard: React.FC<HabitBreakerCardProps> = ({
               )
             ) : (
               <span className="text-slate-300">
-                Daily Ceiling: <strong className="text-white">{currentMonthTarget} {breaker.metricUnit}</strong>
+                Daily Ceiling: <strong className="text-white">{currentMonthTarget} {breaker.metricUnit || 'hrs'}</strong>
               </span>
             )}
           </div>
@@ -227,7 +295,7 @@ export const HabitBreakerCard: React.FC<HabitBreakerCardProps> = ({
                 <div className="font-bold text-sm mt-0.5">
                   {plan.targetAllowance}{' '}
                   <span className="text-[10px] font-normal text-slate-400">
-                    {breaker.trackingType === 'frequency' ? 'days' : breaker.metricUnit}
+                    {breaker.trackingType === 'frequency' ? 'days' : breaker.metricUnit || 'hrs'}
                   </span>
                 </div>
               </div>
@@ -272,7 +340,7 @@ export const HabitBreakerCard: React.FC<HabitBreakerCardProps> = ({
             </h4>
           </div>
           <span className="text-[10px] font-mono text-slate-500">
-            Click day to log or adjust
+            Click day to confirm execution or edit
           </span>
         </div>
 
@@ -288,27 +356,19 @@ export const HabitBreakerCard: React.FC<HabitBreakerCardProps> = ({
               <button
                 key={iso}
                 type="button"
-                onClick={() => {
-                  if (breaker.trackingType === 'metric') {
-                    setEditingDay(iso);
-                    setMetricInputValue(entry?.metricValue !== undefined ? String(entry.metricValue) : '');
-                    setDayNotes(entry?.notes || '');
-                  } else {
-                    handleToggleDayExecution(iso);
-                  }
-                }}
-                className={`p-1.5 rounded-lg border text-center transition flex flex-col items-center justify-between min-h-[48px] relative ${
+                onClick={() => handleDayClick(iso)}
+                className={`p-1.5 rounded-lg border text-center transition flex flex-col items-center justify-between min-h-[50px] relative active-press ${
                   isExecuted
                     ? 'bg-rose-950/40 border-rose-600/50 text-rose-300'
                     : 'bg-[#090b10] border-[#1b2131] hover:border-[#2b334c] text-slate-400'
                 } ${isToday ? 'ring-1 ring-blue-400' : ''}`}
-                title={`${iso}: ${isExecuted ? 'Habit executed' : 'Clean day'}`}
+                title={`${iso}: ${isExecuted ? 'Habit executed (click to remove)' : 'Clean day (click to record)'}`}
               >
                 <span className="text-[10px] font-mono font-bold">{dayNum}</span>
                 {isExecuted ? (
-                  <span className="text-[9px] font-mono font-extrabold text-rose-400">
-                    {breaker.trackingType === 'metric' && entry?.metricValue !== undefined
-                      ? `${entry.metricValue}${breaker.metricUnit || 'h'}`
+                  <span className="text-[9px] font-mono font-extrabold text-rose-400 leading-tight">
+                    {breaker.trackingType === 'metric'
+                      ? formatEntryTime(entry)
                       : 'FAIL'}
                   </span>
                 ) : (
@@ -320,70 +380,155 @@ export const HabitBreakerCard: React.FC<HabitBreakerCardProps> = ({
         </div>
       </div>
 
-      {/* Quick Day Log Modal for Metric Mode */}
-      {editingDay && (
-        <div className="p-4 rounded-xl bg-[#141824] border border-blue-500/40 space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-white">
-              Log Usage for {editingDay} ({breaker.title})
-            </span>
-            <button
-              type="button"
-              onClick={() => setEditingDay(null)}
-              className="p-1 text-slate-400 hover:text-white"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
+      {/* POP-UP CONFIRMATION MODAL (Prevents accidental add / accidental delete) */}
+      {activeDayModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-[#0c0e17] border border-[#1e2436] w-full max-w-md rounded-2xl shadow-2xl my-auto overflow-hidden flex flex-col">
+            {/* Modal Header */}
+            <div className="p-4 sm:p-5 border-b border-[#1b2133] bg-[#0d101a] flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div
+                  className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+                    activeDayModal.action === 'remove_frequency'
+                      ? 'bg-emerald-950/40 border border-emerald-800/40 text-emerald-400'
+                      : 'bg-rose-950/40 border border-rose-800/40 text-rose-400'
+                  }`}
+                >
+                  {activeDayModal.action === 'remove_frequency' ? (
+                    <RotateCcw className="w-4 h-4" />
+                  ) : (
+                    <AlertTriangle className="w-4 h-4" />
+                  )}
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-white">
+                    {activeDayModal.action === 'add_frequency'
+                      ? 'Confirm Habit Execution'
+                      : activeDayModal.action === 'remove_frequency'
+                      ? 'Remove Logged Execution'
+                      : `Log Time for ${formatDatePretty(activeDayModal.dateISO)}`}
+                  </h4>
+                  <span className="text-[11px] font-mono text-slate-400">
+                    {formatDatePretty(activeDayModal.dateISO)} • {breaker.title}
+                  </span>
+                </div>
+              </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-[10px] font-mono text-slate-400 mb-1">
-                Amount ({breaker.metricUnit || 'Units'})
-              </label>
-              <input
-                type="number"
-                step="any"
-                min="0"
-                value={metricInputValue}
-                onChange={(e) => setMetricInputValue(e.target.value)}
-                placeholder={`e.g. 3.5 ${breaker.metricUnit || ''}`}
-                className="w-full px-3 py-1.5 rounded-lg bg-[#090b10] border border-[#232a3e] text-xs font-mono font-bold text-white focus:outline-none focus:border-blue-500"
-              />
+              <button
+                type="button"
+                onClick={() => setActiveDayModal(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
-            <div>
-              <label className="block text-[10px] font-mono text-slate-400 mb-1">
-                Trigger Notes (Optional)
-              </label>
-              <input
-                type="text"
-                value={dayNotes}
-                onChange={(e) => setDayNotes(e.target.value)}
-                placeholder="e.g. Boredom in evening, stressed..."
-                className="w-full px-3 py-1.5 rounded-lg bg-[#090b10] border border-[#232a3e] text-xs text-white focus:outline-none focus:border-blue-500"
-              />
+
+            {/* Modal Body */}
+            <div className="p-4 sm:p-5 space-y-4 text-xs">
+              {/* CASE 1: CONFIRM ADD FREQUENCY DAY */}
+              {activeDayModal.action === 'add_frequency' && (
+                <div className="space-y-3">
+                  <div className="p-3 rounded-xl bg-[#141824] border border-[#232a3e] text-slate-300 leading-relaxed">
+                    Are you sure you want to mark <strong className="text-white font-mono">{formatDatePretty(activeDayModal.dateISO)}</strong> as an execution day for <strong className="text-rose-400">{breaker.title}</strong>?
+                    <div className="mt-2 text-[11px] font-mono text-amber-400">
+                      ⚡ This will deduct 1 day from your monthly allowance ({allowanceRemaining} days remaining).
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-mono text-slate-400 uppercase mb-1">
+                      Trigger or Reflection Note (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={modalNotes}
+                      onChange={(e) => setModalNotes(e.target.value)}
+                      placeholder="e.g. Felt stressed after work, slipped up..."
+                      className="w-full px-3 py-2 rounded-lg bg-[#090b10] border border-[#232a3e] text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-rose-500"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* CASE 2: CONFIRM REMOVE DAY / TIME ENTRY */}
+              {activeDayModal.action === 'remove_frequency' && (
+                <div className="space-y-3">
+                  <div className="p-3 rounded-xl bg-[#141824] border border-[#232a3e] text-slate-300 leading-relaxed">
+                    Remove the entry recorded on <strong className="text-white font-mono">{formatDatePretty(activeDayModal.dateISO)}</strong>?
+                    <div className="mt-2 text-[11px] font-mono text-emerald-400">
+                      {breaker.trackingType === 'metric'
+                        ? '✅ This will clear the logged duration and mark this day clean.'
+                        : `✅ This will restore 1 day back to your available monthly allowance (${allowanceRemaining + 1} days remaining).`}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* CASE 3: CYLINDER TIME PICKER FOR METRIC AMOUNT (INT / FLOAT) */}
+              {activeDayModal.action === 'log_metric' && (
+                <div className="space-y-4">
+                  <CylinderTimePicker
+                    initialHours={selectedHours}
+                    initialMinutes={selectedMinutes}
+                    onChange={(h, m, floatVal) => {
+                      setSelectedHours(h);
+                      setSelectedMinutes(m);
+                      setSelectedFloatVal(floatVal);
+                    }}
+                  />
+
+                  <div>
+                    <label className="block text-[10px] font-mono text-slate-400 uppercase mb-1">
+                      Context / Notes (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={modalNotes}
+                      onChange={(e) => setModalNotes(e.target.value)}
+                      placeholder="e.g. Social media doomscrolling in evening..."
+                      className="w-full px-3 py-2 rounded-lg bg-[#090b10] border border-[#232a3e] text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-rose-500"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
 
-          <div className="flex items-center justify-between pt-1">
-            <button
-              type="button"
-              onClick={() => {
-                onLogExecution(breaker.id, editingDay, false);
-                setEditingDay(null);
-              }}
-              className="text-xs text-slate-400 hover:text-white"
-            >
-              Mark Clean (0 {breaker.metricUnit})
-            </button>
+            {/* Modal Actions */}
+            <div className="p-4 border-t border-[#1b2133] bg-[#0d101a] flex items-center justify-between">
+              {activeDayModal.action === 'log_metric' && breaker.logs[activeDayModal.dateISO]?.executed ? (
+                <button
+                  type="button"
+                  onClick={handleRemoveMetricEntry}
+                  className="text-xs font-mono text-rose-400 hover:text-rose-300 hover:underline"
+                >
+                  Remove Entry
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setActiveDayModal(null)}
+                  className="px-4 py-2 rounded-lg bg-[#141824] text-slate-300 text-xs font-semibold hover:bg-[#1b2234] transition"
+                >
+                  Cancel
+                </button>
+              )}
 
-            <button
-              type="button"
-              onClick={() => handleSaveDayMetric(editingDay)}
-              className="px-4 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition"
-            >
-              Save Metric Log
-            </button>
+              <button
+                type="button"
+                onClick={handleConfirmAction}
+                className={`px-5 py-2 rounded-lg font-bold text-xs transition active-press shadow-sm ${
+                  activeDayModal.action === 'remove_frequency'
+                    ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950'
+                    : 'bg-rose-600 hover:bg-rose-500 text-white'
+                }`}
+              >
+                {activeDayModal.action === 'add_frequency'
+                  ? 'Confirm Execution'
+                  : activeDayModal.action === 'remove_frequency'
+                  ? 'Restore Clean Day'
+                  : 'Save Time Entry'}
+              </button>
+            </div>
           </div>
         </div>
       )}
