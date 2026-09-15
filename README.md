@@ -1,74 +1,152 @@
-# VIBE 365 | Habit Tracker & IronForge Gym Logger
+# VIBE 365 | Performance Operating System
 
-A modern, responsive, high-performance web application designed for high performers and athletes. Integrates habit tracking with sub-tasks, multi-horizon strategic objectives, a GitHub-style consistency matrix, and a weekly progressive overload gym logger with drop-set formulas and strength curves.
-
-Built with Next.js 14 App Router, TypeScript, Tailwind CSS, Lucide Icons, and Recharts.
+A dark-mode habit tracking, habit elimination, and progressive overload fitness operating system engineered for athletes and high performers. Built with Next.js 14 App Router, TypeScript, Tailwind CSS, Lucide Icons, and Recharts.
 
 ---
 
-## Key Features
+## Core Capabilities
 
-### 1. Habits & Consistency Matrix
-- **Daily Habit Tracker**: Track habits with interactive sub-task checklists, category pills, and streak indicators.
-- **GitHub-Style Contribution Grid**: 32-week visual consistency matrix with green intensity squares (0%, 25%, 50%, 75%, 100%) tracking daily completion rate. Hover tooltips reveal exact habits and workout logs.
-- **Optimistic Updates & Confetti**: Immediate visual feedback with celebratory particle effects.
+### 1. Habits Engine and Activity Matrix
+- **Daily Checklist**: Track routine habits with category tags, streak counters, and completion percentages.
+- **Nested Subtasks**: Multi-step habit breakdown with individual completion state and progress ratios.
+- **Custom Metrics**: Define quantitative targets per habit (minutes, words, pages, liters) with typed inputs.
+- **Completions Quota**: Set required completion frequency per week or per month.
+- **Expandable Daily Notes**: Per-day markdown reflection and notes for each habit.
+- **Emerald Consistency Matrix**: 32-week GitHub-style activity grid measuring daily completion intensity with date tooltips and interactive selection.
 
-### 2. Strategic Objectives Board
-- Multi-horizon goals: **Daily**, **Weekly**, **Monthly**, and **Quarterly**.
-- Interactive progress sliders, target values, units (kg, reps, L, days), and completion toggles.
+### 2. Fitness Engine and Strength Curves
+- **Weekly Schedule**: 7-day Monday-to-Sunday planner with target workouts per week.
+- **PPL Workout Splits**: Structured Push, Pull, Legs presets with support for custom permanent or session-only muscle groups.
+- **Drop Set Formula**: Log progressive overload sets with formula notation: `Weight (kg) x Reps + Drop Weight (kg) x Drop Reps`.
+- **Daily Body Weight Tracker**: Record morning or post-workout weight with automatic delta comparison against previous sessions.
+- **Sapphire Consistency Matrix**: Dedicated blue activity matrix tracking workout frequency and training volume.
+- **Strength Curves and Analytics**: Interactive Recharts visualization tracking Top Working Weight, Total Volume, and Estimated 1RM (Brzycki formula).
 
-### 3. IronForge Gym Tracker
-- **Weekly Calendar View**: Week-by-week calendar slider with Monday–Sunday display and quick week navigation.
-- **Workouts / Week Goal**: Set and track weekly workout targets (e.g. 4 days/week) with dynamic progress tracking.
-- **Push / Pull / Legs (PPL) Splits**:
-  - **Push Split**: Defaults to 3 muscle groups (Chest, Triceps, Shoulders) + option to add custom muscle groups.
-  - **Pull Split**: Defaults to 2 muscle groups (Back, Biceps) + custom muscle groups.
-  - **Legs Split**: Defaults to 2 muscle groups (Legs, Abs) + custom muscle groups.
-  - **Custom Muscle Groups**: Option to add any muscle group either **for today only** or **permanent** in the library.
-- **Sticky Exercise Library**: Add new exercises under any muscle group; once added, it sticks forever to that muscle group's library.
-- **Sets & Reps Formula with Drop Sets**:
-  - Standard set: `Weight (kg) × Reps` (e.g. `100kg × 12 reps`).
-  - Drop sets: `+ Drop Weight (kg) × Drop Reps` (e.g. `+ 70kg × 5 reps`).
-  - Duplicate set, mark set done, and reorder.
-- **Dedicated Day Page/Modal**: Click any day in the weekly calendar or contribution grid to open the full session view with titles and notes.
-- **Daily Body Weight Tracker**: Log daily morning or post-workout weight at the end of each day with delta comparisons against previous sessions.
+### 3. Habit Breaker Elimination Engine
+- **Structured Elimination Plans**: Define a multi-month elimination timeline (1, 2, 3, 4, or 6 months) to taper off unwanted habits.
+- **Taper Curves**:
+  - Linear: Uniform monthly reductions (e.g., 21 -> 14 -> 7 -> 0 days).
+  - Gentle: Slower initial taper with steepened finish.
+  - Aggressive: Front-loaded quota reduction.
+  - Custom: User-defined monthly targets.
+- **Dual Tracking Modes**:
+  - Days Allowance: Restrict allowed days per month with remaining allowance counters and excess breach indicators.
+  - Daily Metric Ceiling: Progressively lower quantitative ceilings (e.g., screen time in hours or spend).
+- **iOS 3D Cylinder Time Picker**: Dual-drum combination lock picker for hours (0-23) and minutes (0-59) with 3D perspective transforms, scroll-wheel rotation, drag controls, and duration presets (30m, 1h, 2h 20m). Stores exact units and floating-point hour values.
+- **Accidental Click Protection**: In-modal confirmation dialogs when logging or removing calendar execution days, displaying allowance impact before applying changes.
+- **Clean Day Streaks**: Tracks consecutive days free from the target habit.
 
-### 4. Strength Curves & Automated Insights
-- Interactive charts powered by Recharts.
-- Toggle between **Top Working Weight**, **Estimated 1RM (Brzycki Formula)**, and **Total Volume (kg)**.
-- Automated insight engine: e.g. "+20% weight increase over the past month", PR detection, and total volume progression.
+### 4. 30-Day Trash Can and Soft-Delete System
+- **Non-Destructive Deletions**: Deleting habits, workout logs, objectives, or habit breakers stores them in a 30-day soft-delete holding table.
+- **Retention Purge**: Automatic expiration calculation with purge of items older than 30 days.
+- **Restoration**: One-click recovery restoring data structures back into active dashboard views.
+- **Permanent Purge**: Immediate single-item purge or complete trash emptying.
 
-### 5. Data Persistence & Export/Import
-- Local storage sync engine with zero database setup required for instant usage.
-- One-click **Export Backup (JSON)** and **Import Backup (JSON)**.
-- Vercel-ready serverless API routes (`/api/backup`) with database compatibility (PostgreSQL / Neon / Supabase).
+### 5. Action Audit Ledger and Backend APIs
+- **Immutable Audit Logging**: Captures every user modification with full ISO timestamps, action categories, and descriptive payloads.
+- **Audit Viewer**: Searchable modal with action filters and one-click JSON export.
+- **REST Endpoints**:
+  - `GET /api/logs`: Query audit trail with limit and filter support.
+  - `POST /api/logs`: Ingest external or client-side audit entries.
+  - `GET /api/backup`: Export complete system state as JSON.
+  - `POST /api/backup`: Restore system state from backup payload.
+
+---
+
+## Technical Stack
+
+- **Framework**: Next.js 14.2 (App Router)
+- **Language**: TypeScript 5.5
+- **Styling**: Tailwind CSS 3.4
+- **Icons**: Lucide React
+- **Visualizations**: Recharts
+- **Storage**: Client-side storage layer with serverless JSON backup routes
+
+---
+
+## Project Structure
+
+```
+src/
+|-- app/
+|   |-- api/
+|   |   |-- backup/route.ts        # Backup and restore API
+|   |   `-- logs/route.ts          # Action audit ledger API
+|   |-- globals.css                # Obsidian theme and typography
+|   |-- layout.tsx                 # Root layout configuration
+|   |-- page.tsx                   # Central performance dashboard
+|   |-- error.tsx                  # Error boundary
+|   |-- global-error.tsx           # Global root error boundary
+|   `-- not-found.tsx              # 404 handler
+|-- components/
+|   |-- common/
+|   |   |-- ActionLogModal.tsx     # Audit ledger viewer
+|   |   |-- CylinderTimePicker.tsx # iOS combination wheel picker
+|   |   |-- DataManagementModal.tsx# JSON import/export
+|   |   `-- TrashCanModal.tsx      # 30-day soft delete manager
+|   |-- breakers/
+|   |   |-- CreateBreakerModal.tsx # Elimination plan wizard
+|   |   |-- HabitBreakerBoard.tsx  # Habit breaker overview
+|   |   `-- HabitBreakerCard.tsx   # Calendar tracking and breach alerts
+|   |-- gym/
+|   |   |-- DayWorkoutModal.tsx    # Workout and weight ledger
+|   |   |-- ProgressCurves.tsx     # Strength curves and 1RM
+|   |   `-- WeeklyCalendar.tsx     # Weekly training calendar
+|   |-- habits/
+|   |   |-- ContributionGrid.tsx   # Emerald and Sapphire matrices
+|   |   |-- HabitCard.tsx          # Habit item with subtasks and notes
+|   |   `-- HabitList.tsx          # Habits checklist
+|   `-- objectives/
+|       `-- ObjectiveBoard.tsx     # Multi-horizon objectives
+|-- lib/
+|   |-- initialData.ts             # Default configuration and initial seed
+|   |-- storage.ts                 # Local storage and audit ledger helpers
+|   `-- utils.ts                   # Date and numeric utilities
+`-- types/
+    `-- index.ts                   # Domain TypeScript models
+```
 
 ---
 
 ## Getting Started
 
-### Local Development
+### Prerequisites
+- Node.js 18.17 or higher
+- npm 9.0 or higher
 
-```bash
-# Install dependencies
-npm install
+### Installation
 
-# Start development server
-npm run dev
-```
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/MorariuMark/VIBE-365Go.git
+   cd VIBE-365Go
+   ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
 
-### Building for Production
+3. Run the development server:
+   ```bash
+   npm run dev
+   ```
+   Or on Windows, run:
+   ```cmd
+   start-app.bat
+   ```
+
+4. Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+### Production Build
 
 ```bash
 npm run build
 npm start
 ```
 
-### Vercel Deployment
+---
 
-1. Push your repository to GitHub / GitLab.
-2. Import the project in the [Vercel Dashboard](https://vercel.com).
-3. Framework Preset: **Next.js**.
-4. Click **Deploy**.
+## License
+
+MIT License. Engineered for personal performance optimization.
