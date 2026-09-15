@@ -8,6 +8,11 @@ import {
   LoggedExercise,
   GymSet,
   SplitType,
+  TrashItem,
+  TrashItemType,
+  HabitBreaker,
+  ActionLog,
+  ActionType,
 } from '@/types';
 import { getFullDefaultBackup, INITIAL_MUSCLE_GROUPS, INITIAL_GYM_PROFILE } from './initialData';
 
@@ -32,6 +37,20 @@ export function getStoredData(): AppDataBackup {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(fallback));
       return fallback;
     }
+
+    // Ensure migrations for new collections
+    if (!parsed.trash) parsed.trash = [];
+    if (!parsed.habitBreakers) parsed.habitBreakers = [];
+    if (!parsed.actionLogs) parsed.actionLogs = [];
+
+    // 30-day automatic purge for expired trash items
+    const nowTime = Date.now();
+    const activeTrash = parsed.trash.filter((item) => {
+      const expiresAtMs = new Date(item.expiresAt).getTime();
+      return expiresAtMs > nowTime;
+    });
+    parsed.trash = activeTrash;
+
     return parsed;
   } catch (err) {
     console.error('Failed to parse stored data, loading default', err);
@@ -68,11 +87,176 @@ export function importDataFromJSON(jsonText: string): AppDataBackup {
   if (!parsed.habits || !parsed.workoutLogs || !parsed.muscleGroups) {
     throw new Error('Invalid backup file format: missing core collections.');
   }
+  if (!parsed.trash) parsed.trash = [];
+  if (!parsed.habitBreakers) parsed.habitBreakers = [];
+  if (!parsed.actionLogs) parsed.actionLogs = [];
+
   saveStoredData(parsed);
   return parsed;
 }
 
-// Progress curve analytics engine
+// -------------------------------------------------------------
+// Action Logging Engine
+// -------------------------------------------------------------
+export function createActionLog(
+  actionType: ActionType,
+  entityId: string,
+  entityTitle: string,
+  details: string,
+  metadata?: Record<string, any>
+): ActionLog {
+  return {
+    id: `log_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+    timestamp: new Date().toISOString(),
+    actionType,
+    entityId,
+    entityTitle,
+    details,
+    metadata,
+  };
+}
+
+export function recordAction(
+  prev: AppDataBackup,
+  actionType: ActionType,
+  entityId: string,
+  entityTitle: string,
+  details: string,
+  metadata?: Record<string, any>
+): AppDataBackup {
+  const newLog = createActionLog(actionType, entityId, entityTitle, details, metadata);
+  const updatedLogs = [newLog, ...(prev.actionLogs || [])].slice(0, 1000); // capped at 1000
+  return {
+    ...prev,
+    actionLogs: updatedLogs,
+  };
+}
+
+// -------------------------------------------------------------
+// 30-Day Trash Can Engine
+// -------------------------------------------------------------
+export function moveToTrash(
+  prev: AppDataBackup,
+  itemType: TrashItemType,
+  originalId: string,
+  title: string,
+  subtitle: string | undefined,
+  payload: any
+): AppDataBackup {
+  const deletedAt = new Date().toISOString();
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  const trashItem: TrashItem = {
+    id: `trash_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+    itemType,
+    originalId,
+    title,
+    subtitle,
+    deletedAt,
+    expiresAt,
+    payload,
+  };
+
+  let next = { ...prev };
+
+  if (itemType === 'habit') {
+    next.habits = next.habits.filter((h) => h.id !== originalId);
+  } else if (itemType === 'workout') {
+    const updatedWorkouts = { ...next.workoutLogs };
+    delete updatedWorkouts[originalId];
+    next.workoutLogs = updatedWorkouts;
+  } else if (itemType === 'objective') {
+    next.objectives = next.objectives.filter((o) => o.id !== originalId);
+  } else if (itemType === 'habitBreaker') {
+    next.habitBreakers = (next.habitBreakers || []).filter((b) => b.id !== originalId);
+  }
+
+  next.trash = [trashItem, ...(next.trash || [])];
+
+  const logActionType: ActionType =
+    itemType === 'habit'
+      ? 'habit_delete'
+      : itemType === 'workout'
+      ? 'workout_delete'
+      : itemType === 'objective'
+      ? 'objective_delete'
+      : 'breaker_delete';
+
+  return recordAction(
+    next,
+    logActionType,
+    originalId,
+    title,
+    `Moved ${itemType} "${title}" to Trash Can (30-day retention)`
+  );
+}
+
+export function restoreFromTrash(prev: AppDataBackup, trashId: string): AppDataBackup {
+  const item = (prev.trash || []).find((t) => t.id === trashId);
+  if (!item) return prev;
+
+  const nextTrash = (prev.trash || []).filter((t) => t.id !== trashId);
+  let next = { ...prev, trash: nextTrash };
+
+  if (item.itemType === 'habit') {
+    next.habits = [item.payload as Habit, ...next.habits];
+  } else if (item.itemType === 'workout') {
+    const workout = item.payload as WorkoutDayLog;
+    next.workoutLogs = {
+      ...next.workoutLogs,
+      [workout.dateISO]: workout,
+    };
+  } else if (item.itemType === 'objective') {
+    next.objectives = [item.payload as Objective, ...next.objectives];
+  } else if (item.itemType === 'habitBreaker') {
+    next.habitBreakers = [item.payload as HabitBreaker, ...(next.habitBreakers || [])];
+  }
+
+  const logActionType: ActionType =
+    item.itemType === 'habit'
+      ? 'habit_restore'
+      : item.itemType === 'workout'
+      ? 'workout_restore'
+      : item.itemType === 'objective'
+      ? 'objective_restore'
+      : 'breaker_restore';
+
+  return recordAction(
+    next,
+    logActionType,
+    item.originalId,
+    item.title,
+    `Restored ${item.itemType} "${item.title}" from Trash Can`
+  );
+}
+
+export function purgeFromTrash(prev: AppDataBackup, trashId: string): AppDataBackup {
+  const item = (prev.trash || []).find((t) => t.id === trashId);
+  const nextTrash = (prev.trash || []).filter((t) => t.id !== trashId);
+  const next = { ...prev, trash: nextTrash };
+  return recordAction(
+    next,
+    'trash_purge',
+    trashId,
+    item ? item.title : 'Trash Item',
+    `Permanently purged ${item ? `"${item.title}"` : 'item'} from Trash`
+  );
+}
+
+export function emptyTrash(prev: AppDataBackup): AppDataBackup {
+  const count = (prev.trash || []).length;
+  const next = { ...prev, trash: [] };
+  return recordAction(
+    next,
+    'trash_purge',
+    'trash_all',
+    'Empty Trash',
+    `Emptied Trash Can (${count} items permanently deleted)`
+  );
+}
+
+// -------------------------------------------------------------
+// Progress Curve Analytics Engine
+// -------------------------------------------------------------
 export interface ProgressDataPoint {
   date: string;
   weight: number;
@@ -113,85 +297,82 @@ export function calculateProgressCurve(
 
     exerciseName = foundEx.exerciseName;
 
-    // Find top working set
     let topWeight = 0;
     let topReps = 0;
-    let totalVolume = 0;
-    let dropSetNotes = '';
+    let totalVol = 0;
+    const dropParts: string[] = [];
 
     foundEx.sets.forEach((s) => {
+      if (!s.completed && s.completed !== undefined) return;
       const setVol = s.weightKg * s.reps;
-      totalVolume += setVol;
-      if (s.weightKg > topWeight || (s.weightKg === topWeight && s.reps > topReps)) {
+      totalVol += setVol;
+
+      if (s.weightKg > topWeight) {
         topWeight = s.weightKg;
         topReps = s.reps;
       }
+
       if (s.isDropSet && s.dropSet) {
-        totalVolume += s.dropSet.weightKg * s.dropSet.reps;
-        dropSetNotes = `+ ${s.dropSet.weightKg}kg x ${s.dropSet.reps}`;
+        const dropVol = s.dropSet.weightKg * s.dropSet.reps;
+        totalVol += dropVol;
+        dropParts.push(`Drop: ${s.dropSet.weightKg}kg×${s.dropSet.reps}`);
       }
     });
 
-    if (topWeight > 0) {
-      // Brzycki Formula for 1RM: Weight / (1.0278 - 0.0278 * Reps)
-      const e1RM = topReps > 1 ? Math.round(topWeight / (1.0278 - 0.0278 * Math.min(topReps, 12))) : topWeight;
+    if (topWeight === 0) return;
 
-      points.push({
-        date: log.dateISO,
-        weight: topWeight,
-        reps: topReps,
-        estimated1RM: e1RM,
-        totalVolume: Math.round(totalVolume),
-        dropSetSummary: dropSetNotes,
-        workoutTitle: log.title || 'Workout Session',
-      });
-    }
+    // Brzycki 1RM formula: weight / (1.0278 - 0.0278 * reps)
+    const est1RM =
+      topReps > 1 ? Math.round(topWeight / (1.0278 - 0.0278 * Math.min(topReps, 12))) : topWeight;
+
+    points.push({
+      date: log.dateISO,
+      weight: topWeight,
+      reps: topReps,
+      estimated1RM: est1RM,
+      totalVolume: Math.round(totalVol),
+      dropSetSummary: dropParts.length > 0 ? dropParts.join(', ') : undefined,
+      workoutTitle: log.title,
+    });
   });
 
   if (points.length === 0) {
     return { dataPoints: [], insight: null };
   }
 
-  const baseline = points[0];
-  const current = points[points.length - 1];
-
-  // Past 30 days calculation
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  const monthBaseline =
-    points.find((p) => new Date(p.date) >= thirtyDaysAgo) || baseline;
+  // Month-over-month insight
+  const firstPoint = points[0];
+  const lastPoint = points[points.length - 1];
+  const bestWeight = Math.max(...points.map((p) => p.weight));
 
   const weightDeltaPercent =
-    monthBaseline.weight > 0
-      ? Math.round(((current.weight - monthBaseline.weight) / monthBaseline.weight) * 100)
+    firstPoint.weight > 0
+      ? Math.round(((lastPoint.weight - firstPoint.weight) / firstPoint.weight) * 100)
       : 0;
 
   const volumeDeltaPercent =
-    monthBaseline.totalVolume > 0
-      ? Math.round(((current.totalVolume - monthBaseline.totalVolume) / monthBaseline.totalVolume) * 100)
+    firstPoint.totalVolume > 0
+      ? Math.round(((lastPoint.totalVolume - firstPoint.totalVolume) / firstPoint.totalVolume) * 100)
       : 0;
 
-  const bestWeight = Math.max(...points.map((p) => p.weight));
+  const summary =
+    weightDeltaPercent > 0
+      ? `+${weightDeltaPercent}% weight increase over the past ${points.length} recorded sessions!`
+      : weightDeltaPercent === 0
+      ? `Consistent top working weight maintained at ${lastPoint.weight} kg.`
+      : `${weightDeltaPercent}% deload detected compared to initial baseline.`;
 
-  let summary = '';
-  if (weightDeltaPercent > 0) {
-    summary = `+${weightDeltaPercent}% weight increase over the past month. Peak working set: ${current.weight}kg x ${current.reps} reps.`;
-  } else if (weightDeltaPercent === 0) {
-    summary = `Consistent strength maintained at ${current.weight}kg with steady volume progression.`;
-  } else {
-    summary = `Deload / recovery cycle reflected. Top load: ${current.weight}kg.`;
-  }
-
-  const insight: ProgressInsight = {
-    exerciseName,
-    percentWeightIncreaseMonth: weightDeltaPercent,
-    percentVolumeIncreaseMonth: volumeDeltaPercent,
-    current1RM: current.estimated1RM,
-    baseline1RM: monthBaseline.estimated1RM,
-    bestWeightKg: bestWeight,
-    totalSessionsLogged: points.length,
-    summaryText: summary,
+  return {
+    dataPoints: points,
+    insight: {
+      exerciseName,
+      percentWeightIncreaseMonth: weightDeltaPercent,
+      percentVolumeIncreaseMonth: volumeDeltaPercent,
+      current1RM: lastPoint.estimated1RM,
+      baseline1RM: firstPoint.estimated1RM,
+      bestWeightKg: bestWeight,
+      totalSessionsLogged: points.length,
+      summaryText: summary,
+    },
   };
-
-  return { dataPoints: points, insight };
 }

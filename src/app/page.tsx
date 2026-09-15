@@ -10,8 +10,17 @@ import {
   UserGymProfile,
   HabitMetric,
   HabitTargetCompletions,
+  HabitBreaker,
 } from '@/types';
-import { getStoredData, saveStoredData } from '@/lib/storage';
+import {
+  getStoredData,
+  saveStoredData,
+  moveToTrash,
+  restoreFromTrash,
+  purgeFromTrash,
+  emptyTrash,
+  recordAction,
+} from '@/lib/storage';
 import { getTodayISO, formatDatePretty } from '@/lib/utils';
 import { ContributionGrid } from '@/components/habits/ContributionGrid';
 import { HabitList } from '@/components/habits/HabitList';
@@ -20,6 +29,9 @@ import { WeeklyCalendar } from '@/components/gym/WeeklyCalendar';
 import { DayWorkoutModal } from '@/components/gym/DayWorkoutModal';
 import { ProgressCurves } from '@/components/gym/ProgressCurves';
 import { DataManagementModal } from '@/components/common/DataManagementModal';
+import { TrashCanModal } from '@/components/common/TrashCanModal';
+import { ActionLogModal } from '@/components/common/ActionLogModal';
+import { HabitBreakerBoard } from '@/components/breakers/HabitBreakerBoard';
 import {
   Flame,
   CheckCircle2,
@@ -34,9 +46,12 @@ import {
   ChevronRight,
   ShieldCheck,
   Scale,
+  Trash2,
+  History,
+  ShieldAlert,
 } from 'lucide-react';
 
-type ActiveTab = 'habits' | 'fitness' | 'objectives';
+type ActiveTab = 'habits' | 'fitness' | 'breakers' | 'objectives';
 type FitnessSubTab = 'calendar' | 'matrix' | 'curves';
 
 export default function Home() {
@@ -45,9 +60,11 @@ export default function Home() {
   const [fitnessSubTab, setFitnessSubTab] = useState<FitnessSubTab>('calendar');
   const [selectedDate, setSelectedDate] = useState<string>(getTodayISO());
 
-  // Gym dedicated day modal
+  // Modal states
   const [activeWorkoutDate, setActiveWorkoutDate] = useState<string | null>(null);
   const [isDataModalOpen, setIsDataModalOpen] = useState(false);
+  const [isTrashModalOpen, setIsTrashModalOpen] = useState(false);
+  const [isActionLogModalOpen, setIsActionLogModalOpen] = useState(false);
 
   // Load from local storage
   useEffect(() => {
@@ -78,17 +95,22 @@ export default function Home() {
     );
   }
 
-  // Habits Handlers
+  // Habits Handlers with Audit Logging
   const handleToggleHabitComplete = (habitId: string, dateISO: string) => {
     updateData((prev) => {
+      let habitTitle = '';
+      let isDoneNow = false;
+
       const habits = prev.habits.map((h) => {
         if (h.id !== habitId) return h;
+        habitTitle = h.title;
         const currentHist = { ...(h.history || {}) };
         const isCurrentlyDone = Boolean(currentHist[dateISO]);
-        currentHist[dateISO] = !isCurrentlyDone;
+        isDoneNow = !isCurrentlyDone;
+        currentHist[dateISO] = isDoneNow;
 
         let streak = h.streak;
-        if (!isCurrentlyDone) {
+        if (isDoneNow) {
           streak += 1;
         } else {
           streak = Math.max(0, streak - 1);
@@ -102,20 +124,48 @@ export default function Home() {
           bestStreak,
         };
       });
-      return { ...prev, habits };
+
+      const next = { ...prev, habits };
+      return recordAction(
+        next,
+        'habit_toggle',
+        habitId,
+        habitTitle,
+        isDoneNow
+          ? `Marked "${habitTitle}" completed for ${dateISO}`
+          : `Unchecked "${habitTitle}" for ${dateISO}`
+      );
     });
   };
 
   const handleToggleSubtask = (habitId: string, subtaskId: string) => {
     updateData((prev) => {
+      let subtaskTitle = '';
+      let habitTitle = '';
+      let isDone = false;
+
       const habits = prev.habits.map((h) => {
         if (h.id !== habitId) return h;
-        const subtasks = h.subtasks.map((s) =>
-          s.id === subtaskId ? { ...s, completed: !s.completed } : s
-        );
+        habitTitle = h.title;
+        const subtasks = h.subtasks.map((s) => {
+          if (s.id === subtaskId) {
+            subtaskTitle = s.title;
+            isDone = !s.completed;
+            return { ...s, completed: isDone };
+          }
+          return s;
+        });
         return { ...h, subtasks };
       });
-      return { ...prev, habits };
+
+      const next = { ...prev, habits };
+      return recordAction(
+        next,
+        'subtask_toggle',
+        subtaskId,
+        subtaskTitle || habitTitle,
+        `${isDone ? 'Completed' : 'Unchecked'} subtask "${subtaskTitle}" under "${habitTitle}"`
+      );
     });
   };
 
@@ -154,8 +204,10 @@ export default function Home() {
     value: string | number | boolean
   ) => {
     updateData((prev) => {
+      let habitTitle = '';
       const habits = prev.habits.map((h) => {
         if (h.id !== habitId) return h;
+        habitTitle = h.title;
         const dateValues = { ...(h.dailyMetricValues?.[dateISO] || {}) };
         dateValues[metricId] = value;
         return {
@@ -166,7 +218,15 @@ export default function Home() {
           },
         };
       });
-      return { ...prev, habits };
+
+      const next = { ...prev, habits };
+      return recordAction(
+        next,
+        'metric_update',
+        habitId,
+        habitTitle,
+        `Logged metric value "${value}" for "${habitTitle}" on ${dateISO}`
+      );
     });
   };
 
@@ -244,34 +304,61 @@ export default function Home() {
       bestStreak: 0,
       history: {},
     };
-    updateData((prev) => ({
-      ...prev,
-      habits: [newHabit, ...prev.habits],
-    }));
-  };
-
-  const handleDeleteHabit = (habitId: string) => {
-    if (window.confirm('Delete this habit permanently?')) {
-      updateData((prev) => ({
+    updateData((prev) => {
+      const next = {
         ...prev,
-        habits: prev.habits.filter((h) => h.id !== habitId),
-      }));
-    }
+        habits: [newHabit, ...prev.habits],
+      };
+      return recordAction(
+        next,
+        'habit_create',
+        newHabit.id,
+        newHabit.title,
+        `Created habit "${newHabit.title}" in category ${newHabit.category}`
+      );
+    });
   };
 
-  // Objectives Handlers
+  // 30-Day Soft-Delete for Habits
+  const handleDeleteHabit = (habitId: string) => {
+    updateData((prev) => {
+      const target = prev.habits.find((h) => h.id === habitId);
+      if (!target) return prev;
+      return moveToTrash(
+        prev,
+        'habit',
+        habitId,
+        target.title,
+        `${target.subtasks?.length || 0} subtasks • ${target.category}`,
+        target
+      );
+    });
+  };
+
+  // Objectives Handlers with Audit Logging
   const handleToggleObjective = (objectiveId: string) => {
     updateData((prev) => {
+      let objTitle = '';
+      let isCompleted = false;
       const objectives = prev.objectives.map((o) => {
         if (o.id !== objectiveId) return o;
-        const willComplete = !o.completed;
+        objTitle = o.title;
+        isCompleted = !o.completed;
         return {
           ...o,
-          completed: willComplete,
-          progress: willComplete ? 100 : o.progress === 100 ? 50 : o.progress,
+          completed: isCompleted,
+          progress: isCompleted ? 100 : o.progress === 100 ? 50 : o.progress,
         };
       });
-      return { ...prev, objectives };
+
+      const next = { ...prev, objectives };
+      return recordAction(
+        next,
+        'objective_update',
+        objectiveId,
+        objTitle,
+        `${isCompleted ? 'Achieved' : 'Reopened'} objective "${objTitle}"`
+      );
     });
   };
 
@@ -281,8 +368,10 @@ export default function Home() {
     currentValue?: number
   ) => {
     updateData((prev) => {
+      let objTitle = '';
       const objectives = prev.objectives.map((o) => {
         if (o.id !== objectiveId) return o;
+        objTitle = o.title;
         return {
           ...o,
           progress,
@@ -290,7 +379,15 @@ export default function Home() {
           completed: progress >= 100,
         };
       });
-      return { ...prev, objectives };
+
+      const next = { ...prev, objectives };
+      return recordAction(
+        next,
+        'objective_update',
+        objectiveId,
+        objTitle,
+        `Updated progress to ${progress}% on "${objTitle}"`
+      );
     });
   };
 
@@ -304,30 +401,72 @@ export default function Home() {
       completed: false,
       progress: 0,
     };
-    updateData((prev) => ({
-      ...prev,
-      objectives: [created, ...prev.objectives],
-    }));
-  };
-
-  const handleDeleteObjective = (objectiveId: string) => {
-    if (window.confirm('Delete this objective?')) {
-      updateData((prev) => ({
+    updateData((prev) => {
+      const next = {
         ...prev,
-        objectives: prev.objectives.filter((o) => o.id !== objectiveId),
-      }));
-    }
+        objectives: [created, ...prev.objectives],
+      };
+      return recordAction(
+        next,
+        'objective_create',
+        created.id,
+        created.title,
+        `Created ${created.timeframe} objective "${created.title}"`
+      );
+    });
   };
 
-  // Fitness Handlers
+  // 30-Day Soft-Delete for Objectives
+  const handleDeleteObjective = (objectiveId: string) => {
+    updateData((prev) => {
+      const target = prev.objectives.find((o) => o.id === objectiveId);
+      if (!target) return prev;
+      return moveToTrash(
+        prev,
+        'objective',
+        objectiveId,
+        target.title,
+        `${target.timeframe} goal • Due ${target.dueDate}`,
+        target
+      );
+    });
+  };
+
+  // Fitness Handlers with Audit Logging
   const handleSaveWorkout = (workout: WorkoutDayLog) => {
-    updateData((prev) => ({
-      ...prev,
-      workoutLogs: {
-        ...prev.workoutLogs,
-        [workout.dateISO]: workout,
-      },
-    }));
+    updateData((prev) => {
+      const next = {
+        ...prev,
+        workoutLogs: {
+          ...prev.workoutLogs,
+          [workout.dateISO]: workout,
+        },
+      };
+      return recordAction(
+        next,
+        'workout_save',
+        workout.dateISO,
+        workout.title,
+        `Saved session "${workout.title}" with ${workout.exercises?.length || 0} exercises${
+          workout.bodyWeightKg ? ` and body weight ${workout.bodyWeightKg}kg` : ''
+        }`
+      );
+    });
+  };
+
+  const handleDeleteWorkout = (dateISO: string) => {
+    updateData((prev) => {
+      const target = prev.workoutLogs[dateISO];
+      if (!target) return prev;
+      return moveToTrash(
+        prev,
+        'workout',
+        dateISO,
+        target.title || `Workout on ${dateISO}`,
+        `${target.splitType.toUpperCase()} • ${target.exercises?.length || 0} exercises`,
+        target
+      );
+    });
   };
 
   const handleUpdateGymProfile = (profilePatch: Partial<UserGymProfile>) => {
@@ -382,6 +521,102 @@ export default function Home() {
     });
   };
 
+  // Habit Breakers Handlers with Audit Logging
+  const handleLogBreakerExecution = (
+    breakerId: string,
+    dateISO: string,
+    executed: boolean,
+    metricValue?: number,
+    notes?: string
+  ) => {
+    updateData((prev) => {
+      let breakerTitle = '';
+      const habitBreakers = (prev.habitBreakers || []).map((b) => {
+        if (b.id !== breakerId) return b;
+        breakerTitle = b.title;
+        const logs = { ...(b.logs || {}) };
+        if (!executed) {
+          delete logs[dateISO];
+        } else {
+          logs[dateISO] = {
+            dateISO,
+            executed: true,
+            metricValue,
+            notes,
+            loggedAt: new Date().toISOString(),
+          };
+        }
+        return { ...b, logs };
+      });
+
+      const next = { ...prev, habitBreakers };
+      return recordAction(
+        next,
+        'breaker_log',
+        breakerId,
+        breakerTitle || 'Habit Breaker',
+        executed
+          ? `Logged execution for "${breakerTitle}" on ${dateISO}${
+              metricValue !== undefined ? ` (Value: ${metricValue})` : ''
+            }`
+          : `Marked "${breakerTitle}" clean on ${dateISO}`
+      );
+    });
+  };
+
+  const handleCreateBreaker = (
+    newBreakerData: Omit<HabitBreaker, 'id' | 'createdAt' | 'logs'>
+  ) => {
+    const newBreaker: HabitBreaker = {
+      ...newBreakerData,
+      id: `breaker_${Date.now()}`,
+      createdAt: selectedDate,
+      logs: {},
+    };
+    updateData((prev) => {
+      const next = {
+        ...prev,
+        habitBreakers: [newBreaker, ...(prev.habitBreakers || [])],
+      };
+      return recordAction(
+        next,
+        'breaker_create',
+        newBreaker.id,
+        newBreaker.title,
+        `Initiated elimination plan for "${newBreaker.title}" (${newBreaker.durationMonths} months, ${newBreaker.aggressiveness})`
+      );
+    });
+  };
+
+  // 30-Day Soft-Delete for Breakers
+  const handleDeleteBreaker = (breakerId: string) => {
+    updateData((prev) => {
+      const target = (prev.habitBreakers || []).find((b) => b.id === breakerId);
+      if (!target) return prev;
+      return moveToTrash(
+        prev,
+        'habitBreaker',
+        breakerId,
+        target.title,
+        `${target.durationMonths} months plan • ${target.trackingType}`,
+        target
+      );
+    });
+  };
+
+  // Trash Can Restoration & Purge Handlers
+  const handleRestoreFromTrash = (trashId: string) => {
+    updateData((prev) => restoreFromTrash(prev, trashId));
+  };
+
+  const handlePurgeFromTrash = (trashId: string) => {
+    updateData((prev) => purgeFromTrash(prev, trashId));
+  };
+
+  const handleEmptyAllTrash = () => {
+    updateData((prev) => emptyTrash(prev));
+  };
+
   // Previous day weight comparison
   const getPreviousLoggedWeight = (dateStr: string): number | undefined => {
     const dates = Object.keys(data.workoutLogs)
@@ -399,11 +634,8 @@ export default function Home() {
   const bestOverallStreak = Math.max(0, ...data.habits.map((h) => h.bestStreak));
   const currentActiveStreak = Math.max(0, ...data.habits.map((h) => h.streak));
   const todayWorkout = data.workoutLogs[selectedDate];
-  const previousWeight = getPreviousLoggedWeight(selectedDate);
-  const weightDelta =
-    todayWorkout?.bodyWeightKg && previousWeight
-      ? (todayWorkout.bodyWeightKg - previousWeight).toFixed(1)
-      : null;
+  const trashCount = (data.trash || []).length;
+  const auditCount = (data.actionLogs || []).length;
 
   return (
     <div className="min-h-screen bg-[#07080c] text-slate-100 flex flex-col antialiased selection:bg-emerald-500 selection:text-black">
@@ -433,7 +665,7 @@ export default function Home() {
             <button
               type="button"
               onClick={() => setActiveTab('habits')}
-              className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 activeTab === 'habits'
                   ? 'bg-[#1a2133] text-white border border-[#2e3752] shadow-sm'
                   : 'text-slate-400 hover:text-slate-200'
@@ -449,7 +681,7 @@ export default function Home() {
             <button
               type="button"
               onClick={() => setActiveTab('fitness')}
-              className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 activeTab === 'fitness'
                   ? 'bg-[#1a2133] text-white border border-[#2e3752] shadow-sm'
                   : 'text-slate-400 hover:text-slate-200'
@@ -464,8 +696,24 @@ export default function Home() {
 
             <button
               type="button"
+              onClick={() => setActiveTab('breakers')}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                activeTab === 'breakers'
+                  ? 'bg-[#1a2133] text-white border border-[#2e3752] shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
+              <span>Breakers</span>
+              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-black/40 text-slate-400">
+                {(data.habitBreakers || []).length}
+              </span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => setActiveTab('objectives')}
-              className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 activeTab === 'objectives'
                   ? 'bg-[#1a2133] text-white border border-[#2e3752] shadow-sm'
                   : 'text-slate-400 hover:text-slate-200'
@@ -480,7 +728,7 @@ export default function Home() {
           </nav>
 
           {/* Right Action Strip */}
-          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+          <div className="flex items-center gap-2 sm:gap-2.5 flex-shrink-0">
             {/* Quick Workout Button */}
             <button
               type="button"
@@ -491,11 +739,47 @@ export default function Home() {
               <span className="hidden sm:inline">Log Session</span>
             </button>
 
-            {/* Backup & System Modal */}
+            {/* Audit Log Ledger Button */}
+            <button
+              type="button"
+              onClick={() => setIsActionLogModalOpen(true)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#0d1017] hover:bg-[#141924] text-slate-300 border border-[#1c2234] text-xs font-medium transition"
+              title="View immutable action audit ledger"
+            >
+              <History className="w-3.5 h-3.5 text-blue-400" />
+              <span className="hidden lg:inline font-mono">Logs</span>
+              {auditCount > 0 && (
+                <span className="text-[9px] font-mono px-1 py-0.2 rounded bg-blue-950 text-blue-400 border border-blue-800/50 hidden sm:inline">
+                  {auditCount}
+                </span>
+              )}
+            </button>
+
+            {/* 30-Day Trash Can Button */}
+            <button
+              type="button"
+              onClick={() => setIsTrashModalOpen(true)}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition ${
+                trashCount > 0
+                  ? 'bg-rose-950/30 text-rose-300 border-rose-800/40 hover:bg-rose-900/40'
+                  : 'bg-[#0d1017] hover:bg-[#141924] text-slate-400 border-[#1c2234]'
+              }`}
+              title="Open Trash Can (30-day retention)"
+            >
+              <Trash2 className={`w-3.5 h-3.5 ${trashCount > 0 ? 'text-rose-400' : 'text-slate-500'}`} />
+              <span className="hidden sm:inline font-mono">Trash</span>
+              {trashCount > 0 && (
+                <span className="text-[9px] font-mono px-1 py-0.2 rounded bg-rose-900/60 text-rose-300 border border-rose-700/50">
+                  {trashCount}
+                </span>
+              )}
+            </button>
+
+            {/* Backup & JSON Modal */}
             <button
               type="button"
               onClick={() => setIsDataModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#0d1017] hover:bg-[#141924] text-slate-300 border border-[#1c2234] text-xs font-medium transition"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#0d1017] hover:bg-[#141924] text-slate-300 border border-[#1c2234] text-xs font-medium transition"
               title="Backup database and JSON sync"
             >
               <Database className="w-3.5 h-3.5 text-slate-400" />
@@ -594,7 +878,6 @@ export default function Home() {
         {/* TAB 1: HABITS */}
         {activeTab === 'habits' && (
           <div className="space-y-6">
-            {/* Habits Consistency Matrix */}
             <ContributionGrid
               habits={data.habits}
               workoutLogs={data.workoutLogs}
@@ -607,7 +890,6 @@ export default function Home() {
               }}
             />
 
-            {/* Habit Checklist, Subtasks & Metrics */}
             <HabitList
               habits={data.habits}
               selectedDate={selectedDate}
@@ -630,7 +912,6 @@ export default function Home() {
         {/* TAB 2: FITNESS */}
         {activeTab === 'fitness' && (
           <div className="space-y-6">
-            {/* Fitness Sub-Section Tabs */}
             <div className="flex items-center gap-1 bg-[#0d1017] border border-[#1b2030] p-1 rounded-xl w-full sm:w-auto overflow-x-auto scrollbar-none">
               <button
                 type="button"
@@ -672,7 +953,6 @@ export default function Home() {
               </button>
             </div>
 
-            {/* Sub-view 1: Weekly Calendar & Day Logger */}
             {fitnessSubTab === 'calendar' && (
               <div className="space-y-6">
                 <WeeklyCalendar
@@ -684,7 +964,6 @@ export default function Home() {
                   onUpdateGymProfile={handleUpdateGymProfile}
                 />
 
-                {/* Session Launch Card */}
                 <div className="athletic-card rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                   <div>
                     <div className="flex items-center gap-2">
@@ -712,7 +991,6 @@ export default function Home() {
               </div>
             )}
 
-            {/* Sub-view 2: Dedicated Blue Activity Matrix for Gym */}
             {fitnessSubTab === 'matrix' && (
               <div className="space-y-6">
                 <ContributionGrid
@@ -729,7 +1007,6 @@ export default function Home() {
               </div>
             )}
 
-            {/* Sub-view 3: Strength Curves */}
             {fitnessSubTab === 'curves' && (
               <div className="space-y-6">
                 <ProgressCurves
@@ -741,7 +1018,18 @@ export default function Home() {
           </div>
         )}
 
-        {/* TAB 3: OBJECTIVES */}
+        {/* TAB 3: HABIT BREAKERS */}
+        {activeTab === 'breakers' && (
+          <HabitBreakerBoard
+            breakers={data.habitBreakers || []}
+            selectedDate={selectedDate}
+            onLogExecution={handleLogBreakerExecution}
+            onCreateBreaker={handleCreateBreaker}
+            onDeleteBreaker={handleDeleteBreaker}
+          />
+        )}
+
+        {/* TAB 4: OBJECTIVES */}
         {activeTab === 'objectives' && (
           <ObjectiveBoard
             objectives={data.objectives}
@@ -764,6 +1052,25 @@ export default function Home() {
           onSaveWorkout={handleSaveWorkout}
           onAddCustomMuscleGroup={handleAddCustomMuscleGroup}
           onAddCustomExercise={handleAddCustomExercise}
+        />
+      )}
+
+      {/* 30-Day Trash Can Modal */}
+      {isTrashModalOpen && (
+        <TrashCanModal
+          trash={data.trash || []}
+          onClose={() => setIsTrashModalOpen(false)}
+          onRestore={handleRestoreFromTrash}
+          onPurge={handlePurgeFromTrash}
+          onEmptyAll={handleEmptyAllTrash}
+        />
+      )}
+
+      {/* Action Audit Ledger Modal */}
+      {isActionLogModalOpen && (
+        <ActionLogModal
+          logs={data.actionLogs || []}
+          onClose={() => setIsActionLogModalOpen(false)}
         />
       )}
 
@@ -801,6 +1108,17 @@ export default function Home() {
 
         <button
           type="button"
+          onClick={() => setActiveTab('breakers')}
+          className={`flex-1 flex flex-col items-center py-2 rounded-xl text-xs font-semibold transition active-press ${
+            activeTab === 'breakers' ? 'text-rose-400 bg-rose-500/10' : 'text-slate-400'
+          }`}
+        >
+          <ShieldAlert className="w-4 h-4" />
+          <span className="text-[10px] mt-1 font-mono">Breakers</span>
+        </button>
+
+        <button
+          type="button"
           onClick={() => setActiveTab('objectives')}
           className={`flex-1 flex flex-col items-center py-2 rounded-xl text-xs font-semibold transition active-press ${
             activeTab === 'objectives' ? 'text-amber-400 bg-amber-500/10' : 'text-slate-400'
@@ -816,14 +1134,14 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 flex items-center justify-between text-[11px] font-mono">
           <div className="flex items-center gap-2 text-slate-400">
             <span className="w-2 h-2 rounded-full bg-emerald-400" />
-            <span>VIBE 365 LOCAL ENGINE ACTIVE</span>
+            <span>VIBE 365 PERFORMANCE OS • AUDIT ENGINE ONLINE</span>
           </div>
           <div className="flex items-center gap-4 text-slate-500">
-            <span>HABITS</span>
+            <span>HABIT ELIMINATION</span>
             <span>•</span>
-            <span>BLUE MATRIX</span>
+            <span>30-DAY TRASH RETENTION</span>
             <span>•</span>
-            <span>PROGRESSIVE OVERLOAD</span>
+            <span>IMMUTABLE AUDIT TRAIL</span>
           </div>
         </div>
       </footer>

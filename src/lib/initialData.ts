@@ -1,4 +1,14 @@
-import { Habit, Objective, MuscleGroup, WorkoutDayLog, UserGymProfile, AppDataBackup } from '@/types';
+import {
+  Habit,
+  Objective,
+  MuscleGroup,
+  WorkoutDayLog,
+  UserGymProfile,
+  AppDataBackup,
+  TrashItem,
+  HabitBreaker,
+  ActionLog,
+} from '@/types';
 
 export const INITIAL_MUSCLE_GROUPS: MuscleGroup[] = [
   // Push split muscle groups
@@ -719,6 +729,112 @@ export function generateInitialWorkoutLogs(): Record<string, WorkoutDayLog> {
   return logs;
 }
 
+export const INITIAL_HABIT_BREAKERS: HabitBreaker[] = [
+  {
+    id: 'breaker_doomscroll',
+    title: 'Late-Night Doomscrolling',
+    description: 'Eliminate mindless screen consumption in bed past 11 PM.',
+    category: 'mindset',
+    color: '#f43f5e',
+    createdAt: '2026-09-01',
+    startDate: '2026-09-01',
+    durationMonths: 3,
+    aggressiveness: 'linear',
+    trackingType: 'frequency',
+    startingAllowance: 21,
+    monthlyPlan: [
+      { monthIndex: 1, targetAllowance: 21 },
+      { monthIndex: 2, targetAllowance: 14 },
+      { monthIndex: 3, targetAllowance: 7 },
+      { monthIndex: 4, targetAllowance: 0 },
+    ],
+    logs: {
+      '2026-09-02': { dateISO: '2026-09-02', executed: true, loggedAt: '2026-09-02T23:45:00.000Z', notes: 'Scrolled Twitter in bed' },
+      '2026-09-05': { dateISO: '2026-09-05', executed: true, loggedAt: '2026-09-05T23:30:00.000Z', notes: 'YouTube rabbit hole' },
+      '2026-09-09': { dateISO: '2026-09-09', executed: true, loggedAt: '2026-09-09T23:50:00.000Z' },
+      '2026-09-12': { dateISO: '2026-09-12', executed: true, loggedAt: '2026-09-12T23:15:00.000Z' },
+    },
+  },
+  {
+    id: 'breaker_screentime',
+    title: 'Recreational Screen Time',
+    description: 'Taper down non-work phone usage gradually from 4 hrs to under 1 hr.',
+    category: 'productivity',
+    color: '#f59e0b',
+    createdAt: '2026-09-01',
+    startDate: '2026-09-01',
+    durationMonths: 4,
+    aggressiveness: 'gentle',
+    trackingType: 'metric',
+    metricUnit: 'hours',
+    startingAllowance: 4.0,
+    monthlyPlan: [
+      { monthIndex: 1, targetAllowance: 4.0 },
+      { monthIndex: 2, targetAllowance: 3.0 },
+      { monthIndex: 3, targetAllowance: 2.0 },
+      { monthIndex: 4, targetAllowance: 1.0 },
+    ],
+    logs: {
+      '2026-09-10': { dateISO: '2026-09-10', executed: true, metricValue: 3.5, loggedAt: '2026-09-10T22:00:00.000Z' },
+      '2026-09-11': { dateISO: '2026-09-11', executed: true, metricValue: 4.2, loggedAt: '2026-09-11T22:00:00.000Z', notes: 'Exceeded ceiling by 0.2 hr' },
+      '2026-09-12': { dateISO: '2026-09-12', executed: true, metricValue: 2.8, loggedAt: '2026-09-12T22:00:00.000Z' },
+      '2026-09-13': { dateISO: '2026-09-13', executed: true, metricValue: 2.5, loggedAt: '2026-09-13T22:00:00.000Z' },
+      '2026-09-14': { dateISO: '2026-09-14', executed: true, metricValue: 3.1, loggedAt: '2026-09-14T22:00:00.000Z' },
+    },
+  },
+];
+
+export const INITIAL_TRASH: TrashItem[] = [
+  {
+    id: 'trash_sample_1',
+    itemType: 'habit',
+    originalId: 'habit_sample_archived',
+    title: 'Evening Static Stretching',
+    subtitle: '10 min mobility routine before bed',
+    deletedAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(),
+    expiresAt: new Date(Date.now() + 26 * 24 * 60 * 60 * 1000).toISOString(),
+    payload: {
+      id: 'habit_sample_archived',
+      title: 'Evening Static Stretching',
+      description: '10 min mobility routine before bed',
+      category: 'health',
+      color: '#3b82f6',
+      subtasks: [{ id: 's1', title: 'Hamstring stretch', completed: true }],
+      streak: 3,
+      bestStreak: 12,
+      createdAt: '2026-08-01',
+      history: {},
+    },
+  },
+];
+
+export const INITIAL_ACTION_LOGS: ActionLog[] = [
+  {
+    id: 'log_init_1',
+    timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+    actionType: 'workout_save',
+    entityId: 'workout_today',
+    entityTitle: 'Heavy Push Session',
+    details: 'Saved workout session with 4 exercises and logged body weight 82.4 kg',
+  },
+  {
+    id: 'log_init_2',
+    timestamp: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
+    actionType: 'habit_toggle',
+    entityId: 'habit_1',
+    entityTitle: 'Morning Sunlight & Hydration',
+    details: 'Marked habit as completed for today',
+  },
+  {
+    id: 'log_init_3',
+    timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
+    actionType: 'subtask_toggle',
+    entityId: 'sub_1',
+    entityTitle: 'Drink 500ml water + electrolytes',
+    details: 'Checked subtask as done under Morning Sunlight & Hydration',
+  },
+];
+
 export function getFullDefaultBackup(): AppDataBackup {
   return {
     version: '1.0.0',
@@ -728,5 +844,8 @@ export function getFullDefaultBackup(): AppDataBackup {
     workoutLogs: generateInitialWorkoutLogs(),
     muscleGroups: INITIAL_MUSCLE_GROUPS,
     gymProfile: INITIAL_GYM_PROFILE,
+    trash: INITIAL_TRASH,
+    habitBreakers: INITIAL_HABIT_BREAKERS,
+    actionLogs: INITIAL_ACTION_LOGS,
   };
 }

@@ -116,6 +116,94 @@ export interface UserGymProfile {
   preferredWeightUnit: 'kg' | 'lbs';
 }
 
+// -------------------------------------------------------------
+// Trash Can & 30-Day Soft-Delete System
+// -------------------------------------------------------------
+export type TrashItemType = 'habit' | 'workout' | 'objective' | 'habitBreaker';
+
+export interface TrashItem {
+  id: string; // unique trash ID: trash_12345
+  itemType: TrashItemType;
+  originalId: string;
+  title: string;
+  subtitle?: string;
+  deletedAt: string; // ISO datetime e.g. "2026-09-15T03:00:00.000Z"
+  expiresAt: string; // ISO datetime (deletedAt + 30 days)
+  payload: any; // Full entity data serialized for 100% fidelity restoration
+}
+
+// -------------------------------------------------------------
+// Habit Breaker Progressive Elimination System
+// -------------------------------------------------------------
+export type BreakerTrackingType = 'frequency' | 'metric';
+export type BreakerAggressiveness = 'gentle' | 'linear' | 'aggressive' | 'custom';
+
+export interface MonthlyAllowancePlan {
+  monthIndex: number; // 1, 2, 3, etc.
+  targetAllowance: number; // Max allowed execution days OR daily quantitative ceiling
+}
+
+export interface HabitBreakerLogEntry {
+  dateISO: string; // "YYYY-MM-DD"
+  executed: boolean; // Did perform the bad habit on this day
+  metricValue?: number; // Optional quantitative value (e.g. 3.5 hrs screen time, 10 cigarettes)
+  notes?: string;
+  loggedAt: string; // Exact ISO timestamp when log was recorded
+}
+
+export interface HabitBreaker {
+  id: string;
+  title: string; // e.g. "Late-Night Doomscrolling", "Vaping / Nicotine", "Fast Food / Sugar"
+  description?: string;
+  category: string;
+  color: string;
+  createdAt: string; // ISO date
+  startDate: string; // "YYYY-MM-DD"
+  durationMonths: number; // 1 to 6 months
+  aggressiveness: BreakerAggressiveness;
+  trackingType: BreakerTrackingType;
+  metricUnit?: string; // "hours", "min", "cigs", "$", "times"
+  startingAllowance: number; // e.g. 21 days or 4.0 hrs/day
+  monthlyPlan: MonthlyAllowancePlan[]; // Progressive monthly quota schedule
+  logs: Record<string, HabitBreakerLogEntry>; // dateISO -> log
+}
+
+// -------------------------------------------------------------
+// Immutable Action Audit Ledger
+// -------------------------------------------------------------
+export type ActionType =
+  | 'habit_toggle'
+  | 'subtask_toggle'
+  | 'metric_update'
+  | 'habit_create'
+  | 'habit_delete'
+  | 'habit_restore'
+  | 'workout_save'
+  | 'workout_delete'
+  | 'workout_restore'
+  | 'objective_update'
+  | 'objective_create'
+  | 'objective_delete'
+  | 'objective_restore'
+  | 'breaker_create'
+  | 'breaker_log'
+  | 'breaker_delete'
+  | 'breaker_restore'
+  | 'trash_purge';
+
+export interface ActionLog {
+  id: string;
+  timestamp: string; // Full ISO datetime string: "2026-09-15T03:00:12.456Z"
+  actionType: ActionType;
+  entityId: string;
+  entityTitle: string;
+  details: string; // Human-readable description of the exact mutation
+  metadata?: Record<string, any>;
+}
+
+// -------------------------------------------------------------
+// Unified Application Data Backup
+// -------------------------------------------------------------
 export interface AppDataBackup {
   version: string;
   exportedAt: string;
@@ -124,4 +212,7 @@ export interface AppDataBackup {
   workoutLogs: Record<string, WorkoutDayLog>; // dateISO -> log
   muscleGroups: MuscleGroup[];
   gymProfile: UserGymProfile;
+  trash: TrashItem[]; // 30-day soft-delete retention
+  habitBreakers: HabitBreaker[]; // Habit elimination engine
+  actionLogs: ActionLog[]; // Immutable datetime audit trail
 }
