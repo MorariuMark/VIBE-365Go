@@ -241,6 +241,8 @@ async function dispatchProviderCall(
   const nvKey = customKeys?.nvidia || process.env.NVIDIA_NIM_API_KEY || '';
   const ollamaUrl = customKeys?.ollamaUrl || process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
 
+
+
   switch (provider) {
     case 'groq':
       if (!groqKey) return { success: false, error: 'GROQ_API_KEY is not configured.' };

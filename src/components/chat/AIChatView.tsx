@@ -323,36 +323,36 @@ export const AIChatView: React.FC<AIChatViewProps> = ({ appData, selectedDate })
   const activeModelCap = activeModelMeta?.contextWindow || 131072;
 
   return (
-    <div className="flex flex-col h-[calc(100dvh-185px)] md:h-[calc(100vh-140px)] min-h-[460px] md:min-h-[580px] bg-[#07090e] border border-[#171d2b] rounded-2xl overflow-hidden shadow-2xl">
-      {/* Top Header Control Strip */}
-      <div className="flex-shrink-0 px-4 py-3 bg-[#0a0d14] border-b border-[#171c2b] flex flex-wrap items-center justify-between gap-3">
+    <div className="flex flex-col h-[calc(100dvh-130px)] md:h-[calc(100vh-140px)] min-h-[400px] md:min-h-[580px] bg-[#07090e] border border-[#171d2b] rounded-2xl overflow-hidden shadow-2xl">
+      {/* Top Header Control Strip - Clean single row on mobile */}
+      <div className="flex-shrink-0 px-3 py-2 sm:px-4 sm:py-3 bg-[#0a0d14] border-b border-[#171c2b] flex items-center justify-between gap-2">
         {/* Left: Model & Provider Selector Pill */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
           <button
             type="button"
             onClick={() => setIsModelModalOpen(true)}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#111622] hover:bg-[#181e2e] border border-[#232b40] text-xs font-semibold transition group shadow-sm"
+            className="flex items-center gap-1.5 sm:gap-2 px-2.5 py-1.5 rounded-xl bg-[#111622] hover:bg-[#181e2e] border border-[#232b40] text-xs font-semibold transition group shadow-sm max-w-[170px] sm:max-w-none truncate"
           >
             <div
-              className={`w-2 h-2 rounded-full`}
+              className="w-2 h-2 rounded-full flex-shrink-0"
               style={{ backgroundColor: activeProviderMeta?.accentHex || '#10b981' }}
             />
-            <span className="font-bold text-white tracking-wide">
+            <span className="font-bold text-white tracking-wide truncate">
               {activeModelMeta?.name || selectedModelId}
             </span>
             <span
-              className={`text-[9px] font-mono px-1.5 py-0.2 rounded ${activeProviderMeta?.color || 'text-slate-400'}`}
+              className={`text-[9px] font-mono px-1 py-0.2 rounded hidden sm:inline ${activeProviderMeta?.color || 'text-slate-400'}`}
             >
               {activeProviderMeta?.name || selectedProvider}
             </span>
-            <ChevronDown className="w-3.5 h-3.5 text-slate-500 group-hover:text-slate-300 transition" />
+            <ChevronDown className="w-3.5 h-3.5 text-slate-500 group-hover:text-slate-300 transition flex-shrink-0" />
           </button>
 
-          {/* Fallback Badge */}
+          {/* Fallback Badge (Desktop only) */}
           <button
             type="button"
             onClick={() => setIsModelModalOpen(true)}
-            className={`hidden sm:flex items-center gap-1 text-[10px] font-mono px-2 py-1 rounded-lg border transition ${
+            className={`hidden lg:flex items-center gap-1 text-[10px] font-mono px-2 py-1 rounded-lg border transition ${
               enableFallback
                 ? 'bg-emerald-950/50 text-emerald-400 border-emerald-800/40 hover:bg-emerald-900/50'
                 : 'bg-slate-900 text-slate-500 border-slate-800'
@@ -365,23 +365,24 @@ export const AIChatView: React.FC<AIChatViewProps> = ({ appData, selectedDate })
         </div>
 
         {/* Right: Actions (Context Badge, Clear, Export) */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
           {/* Context Configuration Pill */}
           <button
             type="button"
             onClick={() => setIsContextModalOpen(true)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-medium transition ${
+            className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-medium transition ${
               attachContext
                 ? 'bg-emerald-950/40 text-emerald-300 border-emerald-700/50 hover:bg-emerald-900/40 shadow-sm'
                 : 'bg-[#10141e] text-slate-400 border-[#1e2538] hover:text-slate-200'
             }`}
+            title="Context settings"
           >
             <Layers className="w-3.5 h-3.5 text-emerald-400" />
-            <span>
-              {contextOptions.format === 'json' ? 'JSON Dump' : 'Context'}:{' '}
+            <span className="hidden sm:inline">
+              {contextOptions.format === 'json' ? 'JSON' : 'Context'}:{' '}
               <strong className="text-white font-mono">{currentContextPayload.timeframeLabel}</strong>
             </span>
-            <span className="text-[10px] font-mono bg-black/40 px-1.5 py-0.2 rounded text-slate-400">
+            <span className="text-[10px] font-mono bg-black/40 px-1 py-0.2 rounded text-slate-400 hidden md:inline">
               ~{currentContextPayload.estimatedTokens} tk
             </span>
           </button>
@@ -398,12 +399,12 @@ export const AIChatView: React.FC<AIChatViewProps> = ({ appData, selectedDate })
             </button>
           )}
 
-          {/* Export Chat */}
+          {/* Export Chat (Desktop only) */}
           {messages.length > 0 && (
             <button
               type="button"
               onClick={handleExportChat}
-              className="p-1.5 rounded-lg bg-[#111622] hover:bg-[#181e2e] text-slate-400 hover:text-slate-200 border border-[#20273a] transition"
+              className="p-1.5 rounded-lg bg-[#111622] hover:bg-[#181e2e] text-slate-400 hover:text-slate-200 border border-[#20273a] transition hidden sm:inline-flex"
               title="Export chat transcript"
             >
               <Download className="w-3.5 h-3.5" />
@@ -412,8 +413,9 @@ export const AIChatView: React.FC<AIChatViewProps> = ({ appData, selectedDate })
         </div>
       </div>
 
-      {/* Quick Context Chips Strip */}
-      <div className="flex-shrink-0 px-4 py-2 bg-[#080b12] border-b border-[#141824] flex items-center gap-2 overflow-x-auto scrollbar-none text-[11px]">
+      {/* Quick Context Chips Strip - Desktop Only */}
+      <div className="hidden md:flex flex-shrink-0 px-4 py-2 bg-[#080b12] border-b border-[#141824] items-center gap-2 overflow-x-auto scrollbar-none text-[11px]">
+
         <span className="text-slate-500 font-mono flex items-center gap-1 flex-shrink-0">
           <Sparkles className="w-3 h-3 text-emerald-400" />
           <span>Inject:</span>
@@ -476,54 +478,55 @@ export const AIChatView: React.FC<AIChatViewProps> = ({ appData, selectedDate })
       </div>
 
       {/* Main Messages Viewport */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 scrollbar-thin scrollbar-thumb-[#171e2c]">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4 sm:space-y-6 scrollbar-thin scrollbar-thumb-[#171e2c]">
         {/* Empty State */}
         {messages.length === 0 && (
-          <div className="h-full flex flex-col items-center justify-center text-center max-w-xl mx-auto py-8 space-y-6">
-            <div className="w-16 h-16 rounded-2xl bg-emerald-950/50 border border-emerald-700/40 flex items-center justify-center text-emerald-400 shadow-xl">
-              <Bot className="w-8 h-8 stroke-[2]" />
+          <div className="h-full flex flex-col items-center justify-center text-center max-w-xl mx-auto py-4 sm:py-8 px-2 space-y-3 sm:space-y-5">
+            <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-2xl bg-emerald-950/50 border border-emerald-700/40 flex items-center justify-center text-emerald-400 shadow-xl">
+              <Bot className="w-5 h-5 sm:w-7 sm:h-7 stroke-[2]" />
             </div>
 
-            <div className="space-y-2">
-              <h3 className="text-xl font-extrabold text-white tracking-tight">
-                VIBE <span className="text-emerald-400">AI</span> Performance Intelligence
+            <div className="space-y-1 sm:space-y-1.5">
+              <h3 className="text-base sm:text-xl font-extrabold text-white tracking-tight">
+                VIBE <span className="text-emerald-400">AI</span> Coach
               </h3>
-              <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
-                Connect your habits momentum, gym progressive overload, habit breakers, and quarterly
-                milestones to high-speed AI inference. Select prompt starters below or type your inquiry.
+              <p className="text-xs sm:text-sm text-slate-400 leading-relaxed max-w-md">
+                Ask about workout overload, habit streaks, or habit elimination.
               </p>
             </div>
 
             {/* Starter Prompt Cards */}
-            <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-left">
+            <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-2 text-left pt-1">
               {[
                 {
                   icon: Dumbbell,
-                  title: 'Audit Progressive Overload',
-                  desc: 'Analyze workout volume, top weights, and split consistency.',
+                  title: 'Workout Progress Audit',
+                  desc: 'Analyze volume & progressive overload.',
                   prompt:
-                    'Audit my fitness and workout progress over the past month. Am I hitting progressive overload, and what muscle groups or exercises need more volume?',
+                    'Audit my fitness and workout progress over the past month. Am I hitting progressive overload?',
                 },
                 {
                   icon: Flame,
-                  title: 'Evaluate Habit Momentum',
-                  desc: 'Spot unbroken streaks and pinpoint vulnerable habits.',
+                  title: 'Habit Momentum Check',
+                  desc: 'Spot streaks and missed habits.',
                   prompt:
-                    'Review my current habit streaks. Which habits have the highest momentum and which ones are currently at risk or have been missed recently?',
+                    'Review my current habit streaks. Which habits have the highest momentum and which ones are vulnerable?',
                 },
                 {
                   icon: Target,
                   title: 'Quarterly Objectives Review',
-                  desc: 'Check if daily actions are compounding toward quarterly targets.',
+                  desc: 'Check pace on quarterly targets.',
+                  className: 'hidden sm:block',
                   prompt:
-                    'Review my quarterly objectives against my daily habits and workout logs. Am I on pace to hit my target metrics by their due dates?',
+                    'Review my quarterly objectives against my daily habits and workout logs. Am I on pace to hit my target metrics?',
                 },
                 {
                   icon: FileJson,
-                  title: 'Raw JSON Deep Synthesis',
-                  desc: 'Examine complete telemetry dump for blind spots.',
+                  title: 'Raw Telemetry Synthesis',
+                  desc: 'Full diagnostic breakdown.',
+                  className: 'hidden sm:block',
                   prompt:
-                    'I have attached my raw JSON performance data. Provide an exhaustive diagnostic breakdown: strengths, weaknesses, and a 7-day action protocol.',
+                    'I have attached my performance data. Provide a diagnostic breakdown: strengths, weaknesses, and a 7-day action protocol.',
                 },
               ].map((card, idx) => {
                 const Icon = card.icon;
@@ -532,13 +535,13 @@ export const AIChatView: React.FC<AIChatViewProps> = ({ appData, selectedDate })
                     key={idx}
                     type="button"
                     onClick={() => handleStarterClick(card.prompt)}
-                    className="p-3.5 rounded-xl bg-[#0e121b] border border-[#1b2234] hover:bg-[#141a26] hover:border-emerald-500/50 transition text-left group"
+                    className={`p-2.5 sm:p-3.5 rounded-xl bg-[#0e121b] border border-[#1b2234] hover:bg-[#141a26] hover:border-emerald-500/50 transition text-left group ${card.className || ''}`}
                   >
-                    <div className="flex items-center gap-2 mb-1">
-                      <Icon className="w-4 h-4 text-emerald-400 group-hover:scale-110 transition-transform" />
-                      <span className="text-xs font-bold text-white">{card.title}</span>
+                    <div className="flex items-center gap-2 mb-0.5 sm:mb-1">
+                      <Icon className="w-3.5 h-3.5 text-emerald-400 group-hover:scale-110 transition-transform flex-shrink-0" />
+                      <span className="text-xs font-bold text-white truncate">{card.title}</span>
                     </div>
-                    <p className="text-[11px] text-slate-400 leading-snug">{card.desc}</p>
+                    <p className="text-[10px] sm:text-[11px] text-slate-400 leading-snug truncate">{card.desc}</p>
                   </button>
                 );
               })}
@@ -579,12 +582,12 @@ export const AIChatView: React.FC<AIChatViewProps> = ({ appData, selectedDate })
                         </span>
                       )}
                       {message.inputTokens !== undefined && (
-                        <span className="text-cyan-400/90 bg-cyan-950/60 px-1.5 py-0.5 rounded border border-cyan-800/40 text-[9px] font-mono tracking-wider">
+                        <span className="text-cyan-400/90 bg-cyan-950/60 px-1.5 py-0.5 rounded border border-cyan-800/40 text-[9px] font-mono tracking-wider hidden sm:inline">
                           IN: {message.inputTokens.toLocaleString()} TK ({message.contextFormat?.toUpperCase() || 'MD'})
                         </span>
                       )}
                       {message.latencyMs && (
-                        <span className="text-slate-500">{message.latencyMs}ms</span>
+                        <span className="text-slate-500 hidden sm:inline">{message.latencyMs}ms</span>
                       )}
                     </div>
 
@@ -626,7 +629,7 @@ export const AIChatView: React.FC<AIChatViewProps> = ({ appData, selectedDate })
                   <div>
                     <div className="whitespace-pre-wrap leading-relaxed text-sm">{message.content}</div>
                     {message.inputTokens !== undefined && (
-                      <div className="mt-2.5 pt-2 border-t border-emerald-500/20 flex flex-wrap items-center justify-between gap-2 text-[10px] font-mono tracking-wider text-emerald-400/90 uppercase select-none">
+                      <div className="mt-2.5 pt-2 border-t border-emerald-500/20 hidden md:flex flex-wrap items-center justify-between gap-2 text-[10px] font-mono tracking-wider text-emerald-400/90 uppercase select-none">
                         <span className="flex items-center gap-1.5">
                           <Terminal className="w-3 h-3 text-emerald-400" />
                           <span className="text-emerald-500 font-bold">TELEMETRY_IN //</span>
@@ -665,9 +668,9 @@ export const AIChatView: React.FC<AIChatViewProps> = ({ appData, selectedDate })
       </div>
 
       {/* Bottom Input Console */}
-      <div className="flex-shrink-0 p-3 sm:p-4 bg-[#0a0d14] border-t border-[#171c2b] space-y-2.5">
-        {/* Cyber Live Telemetry Token Gauge */}
-        <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 bg-[#05070d] border border-[#162035] rounded-xl shadow-inner font-mono text-[10px] tracking-wider uppercase select-none">
+      <div className="flex-shrink-0 p-2 sm:p-4 bg-[#0a0d14] border-t border-[#171c2b] space-y-2">
+        {/* Cyber Live Telemetry Token Gauge (Desktop Only) */}
+        <div className="hidden md:flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 bg-[#05070d] border border-[#162035] rounded-xl shadow-inner font-mono text-[10px] tracking-wider uppercase select-none">
           <div className="flex items-center gap-2 min-w-0">
             <div className="flex items-center gap-1.5 text-emerald-400 flex-shrink-0">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]" />
@@ -721,8 +724,8 @@ export const AIChatView: React.FC<AIChatViewProps> = ({ appData, selectedDate })
           </div>
         </div>
 
-        {/* Context Attachment Bar */}
-        <div className="flex items-center justify-between px-1">
+        {/* Context Attachment Bar (Desktop Only) */}
+        <div className="hidden md:flex items-center justify-between px-1">
           <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-400 hover:text-slate-200 transition select-none">
             <input
               type="checkbox"
@@ -736,13 +739,27 @@ export const AIChatView: React.FC<AIChatViewProps> = ({ appData, selectedDate })
             </span>
           </label>
 
-          <span className="text-[10px] font-mono text-slate-500 hidden sm:inline">
+          <span className="text-[10px] font-mono text-slate-500">
             Press Enter to send, Shift+Enter for new line
           </span>
         </div>
 
         {/* Input Bar */}
-        <div className="flex items-end gap-2 bg-[#0e121b] border border-[#20273c] rounded-xl p-2 focus-within:border-emerald-500/70 focus-within:ring-1 focus-within:ring-emerald-500/20 transition">
+        <div className="flex items-end gap-1.5 sm:gap-2 bg-[#0e121b] border border-[#20273c] rounded-xl p-1.5 sm:p-2 focus-within:border-emerald-500/70 focus-within:ring-1 focus-within:ring-emerald-500/20 transition">
+          {/* Quick Context Toggle on Mobile */}
+          <button
+            type="button"
+            onClick={() => setAttachContext(!attachContext)}
+            className={`p-2 rounded-lg transition sm:hidden flex-shrink-0 ${
+              attachContext
+                ? 'text-emerald-400 bg-emerald-500/10'
+                : 'text-slate-500 hover:text-slate-300'
+            }`}
+            title={attachContext ? 'Context Attached' : 'Context Off'}
+          >
+            <Layers className="w-4 h-4" />
+          </button>
+
           <textarea
             ref={textareaRef}
             rows={1}
@@ -754,20 +771,20 @@ export const AIChatView: React.FC<AIChatViewProps> = ({ appData, selectedDate })
                 handleSendMessage();
               }
             }}
-            placeholder="Ask your AI Performance Coach about workouts, streaks, or bad habit elimination..."
-            className="flex-1 bg-transparent border-0 resize-none text-xs sm:text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none max-h-36 min-h-[36px] py-1 px-2 scrollbar-none"
+            placeholder="Ask AI Coach..."
+            className="flex-1 bg-transparent border-0 resize-none text-xs sm:text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none max-h-32 min-h-[36px] py-1 px-1.5 sm:px-2 scrollbar-none"
           />
 
-          <div className="flex flex-col items-end gap-1 flex-shrink-0">
-            <span className="font-mono text-[9px] tracking-wider text-emerald-400/90 bg-[#060a12] px-2 py-0.5 rounded border border-emerald-900/60 shadow-[0_0_8px_rgba(16,185,129,0.15)] flex items-center gap-1 select-none">
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <span className="font-mono text-[9px] tracking-wider text-emerald-400/90 bg-[#060a12] px-2 py-0.5 rounded border border-emerald-900/60 hidden md:inline-flex items-center gap-1 select-none">
               <Zap className="w-2.5 h-2.5 text-emerald-400" />
-              <span>{liveTotalInputTokens.toLocaleString()} TK ({contextOptions.format === 'json' ? 'JSON' : 'MD'})</span>
+              <span>{liveTotalInputTokens.toLocaleString()} TK</span>
             </span>
             <button
               type="button"
               disabled={!inputValue.trim() || isLoading}
               onClick={() => handleSendMessage()}
-              className="px-3.5 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 disabled:hover:bg-emerald-500 text-slate-950 font-bold transition flex items-center justify-center active-press"
+              className="p-2 sm:px-3.5 sm:py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 disabled:opacity-30 disabled:hover:bg-emerald-500 text-slate-950 font-bold transition flex items-center justify-center active-press"
             >
               <Send className="w-4 h-4 stroke-[2.5]" />
             </button>
