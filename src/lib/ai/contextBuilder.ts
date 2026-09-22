@@ -222,7 +222,7 @@ export function buildAppContext(data: AppDataBackup, options: ContextOptions): C
 
       const todayStatus = h.history?.[getTodayISO()] ? 'DONE TODAY' : 'PENDING TODAY';
       lines.push(
-        `- **${h.title}** [${h.category.toUpperCase()}]: Current Streak: **${h.streak}d** | Best: **${
+        `- **${h.title}** [${(h.category || 'general').toUpperCase()}]: Current Streak: **${h.streak}d** | Best: **${
           h.bestStreak
         }d** | Range Completions: **${completionsInRange}** | Today: *${todayStatus}*`
       );
@@ -260,8 +260,8 @@ export function buildAppContext(data: AppDataBackup, options: ContextOptions): C
 
     if (data.gymProfile) {
       lines.push(
-        `- Profile: Goal: ${data.gymProfile.workoutsPerWeekGoal}x/week | Split: ${data.gymProfile.preferredSplit.toUpperCase()} | Unit: ${
-          data.gymProfile.preferredWeightUnit
+        `- Profile: Goal: ${data.gymProfile.workoutsPerWeekGoal || 4}x/week | Split: ${(data.gymProfile.preferredSplit || 'PPL').toUpperCase()} | Unit: ${
+          data.gymProfile.preferredWeightUnit || 'kg'
         }`
       );
     }
@@ -291,7 +291,7 @@ export function buildAppContext(data: AppDataBackup, options: ContextOptions): C
         });
 
         lines.push(
-          `- **${date}** - "${log.title || 'Workout'}" [${log.splitType.toUpperCase()}]: ${
+          `- **${date}** - "${log.title || 'Workout'}" [${(log.splitType || 'workout').toUpperCase()}]: ${
             log.completed ? '✅ Completed' : '⏳ Incomplete'
           }${log.bodyWeightKg ? ` | Bodyweight: ${log.bodyWeightKg}kg` : ''}${
             log.durationMinutes ? ` | Duration: ${log.durationMinutes}m` : ''
@@ -346,7 +346,7 @@ export function buildAppContext(data: AppDataBackup, options: ContextOptions): C
     lines.push(`#### 🎯 STRATEGIC OBJECTIVES (${data.objectives.length} Tracked)`);
     data.objectives.forEach((obj) => {
       lines.push(
-        `- **${obj.title}** [${obj.timeframe.toUpperCase()}]: Progress: **${obj.progress}%** | Due: ${
+        `- **${obj.title}** [${(obj.timeframe || 'goal').toUpperCase()}]: Progress: **${obj.progress}%** | Due: ${
           obj.dueDate
         } | Status: ${obj.completed ? '✅ Achieved' : '🎯 In Progress'}${
           obj.targetValue ? ` (Target: ${obj.currentValue || 0}/${obj.targetValue} ${obj.unit || ''})` : ''
@@ -371,7 +371,7 @@ export function buildAppContext(data: AppDataBackup, options: ContextOptions): C
 
     lines.push(`#### 📜 RECENT ACTION AUDIT TRAIL (${recentActions.length} Records)`);
     recentActions.forEach((a) => {
-      lines.push(`- [${a.timestamp.slice(0, 16).replace('T', ' ')}] ${a.details}`);
+      lines.push(`- [${(a.timestamp || '').slice(0, 16).replace('T', ' ')}] ${a.details || ''}`);
     });
     lines.push('');
     itemCounts.actions = recentActions.length;
@@ -382,7 +382,7 @@ export function buildAppContext(data: AppDataBackup, options: ContextOptions): C
     const activeTasks = data.tasks || [];
     const completedTasksInRange = (data.completedTasks || []).filter((t) => {
       const d = t.completedAt?.slice(0, 10) || t.deadline;
-      return d >= startDate && d <= endDate;
+      return d ? d >= startDate && d <= endDate : false;
     });
 
     lines.push(`#### 📋 TASKS & DEADLINES (${activeTasks.length} Pending, ${completedTasksInRange.length} Completed in Range)`);
@@ -390,9 +390,9 @@ export function buildAppContext(data: AppDataBackup, options: ContextOptions): C
       lines.push(`- No pending tasks in queue.`);
     } else {
       activeTasks.forEach((t) => {
-        const isOverdue = t.deadline < getTodayISO();
-        const isToday = t.deadline === getTodayISO();
-        const statusLabel = isOverdue ? '⚠️ OVERDUE' : isToday ? '🚨 DUE TODAY' : `Due ${t.deadline}`;
+        const isOverdue = t.deadline ? t.deadline < getTodayISO() : false;
+        const isToday = t.deadline ? t.deadline === getTodayISO() : false;
+        const statusLabel = isOverdue ? '⚠️ OVERDUE' : isToday ? '🚨 DUE TODAY' : t.deadline ? `Due ${t.deadline}` : 'No Deadline';
         lines.push(`- [${statusLabel}] **${t.title}** (Priority: ${t.priority || 'medium'})${t.notes ? ` - "${t.notes}"` : ''}`);
       });
     }
@@ -419,7 +419,7 @@ export function buildAppContext(data: AppDataBackup, options: ContextOptions): C
 
       sleepInRange.slice(0, 7).forEach(([date, log]) => {
         lines.push(
-          `- **${date}**: **${log.durationHours}h** sleep (${log.bedtime} → ${log.wakeTime})${
+          `- **${date}**: **${log.durationHours || 0}h** sleep (${log.bedtime || '--:--'} → ${log.wakeTime || '--:--'})${
             log.qualityScore ? ` | Score: ${log.qualityScore}/100` : ''
           }${log.notes ? ` | Notes: "${log.notes}"` : ''}`
         );
