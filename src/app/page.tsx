@@ -516,7 +516,7 @@ export default function Home() {
         'workout',
         dateISO,
         target.title || `Workout on ${dateISO}`,
-        `${target.splitType.toUpperCase()} • ${target.exercises?.length || 0} exercises`,
+        `${(target.splitType || 'workout').toUpperCase()} • ${target.exercises?.length || 0} exercises`,
         target
       );
     });
