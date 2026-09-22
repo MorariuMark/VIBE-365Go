@@ -918,7 +918,27 @@ export const INITIAL_SETTINGS: UserSettings = {
 
 export function getFullDefaultBackup(): AppDataBackup {
   return {
-    version: '1.0.0',
+    version: '2.0.0',
+    exportedAt: new Date().toISOString(),
+    habits: [],
+    objectives: [],
+    workoutLogs: {},
+    muscleGroups: INITIAL_MUSCLE_GROUPS,
+    gymProfile: INITIAL_GYM_PROFILE,
+    trash: [],
+    habitBreakers: [],
+    actionLogs: [],
+    tasks: [],
+    completedTasks: [],
+    sleepLogs: {},
+    fitnessPhotos: {},
+    settings: INITIAL_SETTINGS,
+  };
+}
+
+export function getMockSampleBackup(): AppDataBackup {
+  return {
+    version: '2.0.0',
     exportedAt: new Date().toISOString(),
     habits: INITIAL_HABITS,
     objectives: INITIAL_OBJECTIVES,
@@ -935,3 +955,4 @@ export function getFullDefaultBackup(): AppDataBackup {
     settings: INITIAL_SETTINGS,
   };
 }
+

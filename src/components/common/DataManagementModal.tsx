@@ -2,8 +2,8 @@
 
 import React, { useState, useRef } from 'react';
 import { AppDataBackup } from '@/types';
-import { exportDataAsJSON, importDataFromJSON, saveStoredData } from '@/lib/storage';
-import { getFullDefaultBackup } from '@/lib/initialData';
+import { exportDataAsJSON, importDataFromJSON, saveStoredData, resetAllDataToFresh } from '@/lib/storage';
+import { getFullDefaultBackup, getMockSampleBackup } from '@/lib/initialData';
 import {
   Download,
   Upload,
@@ -15,6 +15,7 @@ import {
   Cloud,
   CloudOff,
   RefreshCw,
+  Trash2,
 } from 'lucide-react';
 import { CloudSyncStatus, saveCloudDataImmediate, loadCloudData } from '@/lib/cloudSync';
 
@@ -37,6 +38,20 @@ export const DataManagementModal: React.FC<DataManagementModalProps> = ({
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isCloudBusy, setIsCloudBusy] = useState(false);
+
+  const handleWipeAndStartFresh = async () => {
+    if (
+      window.confirm(
+        'Erase all data and start completely fresh? This will wipe all habits, workouts, objectives, breakers, tasks, and sleep logs.'
+      )
+    ) {
+      const fresh = resetAllDataToFresh();
+      onDataLoaded(fresh);
+      await saveCloudDataImmediate(fresh);
+      setSuccessMessage('Successfully erased all data and started completely fresh.');
+      setErrorMessage(null);
+    }
+  };
 
   const handleCloudPush = async () => {
     if (!currentData) return;
@@ -106,16 +121,17 @@ export const DataManagementModal: React.FC<DataManagementModalProps> = ({
   const handleResetToDemo = () => {
     if (
       window.confirm(
-        'Reset to sample template data? This will load rich demo habits, objectives, and progressive overload gym logs.'
+        'Load sample template dataset? This will load rich demo habits, objectives, and progressive overload gym logs.'
       )
     ) {
-      const demo = getFullDefaultBackup();
+      const demo = getMockSampleBackup();
       saveStoredData(demo);
       onDataLoaded(demo);
       setSuccessMessage('Loaded demo sample data.');
       setErrorMessage(null);
     }
   };
+
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-sm overflow-y-auto">
@@ -253,6 +269,25 @@ export const DataManagementModal: React.FC<DataManagementModalProps> = ({
               </div>
             </button>
           </div>
+
+          {/* Wipe All & Start Fresh */}
+          <button
+            type="button"
+            onClick={handleWipeAndStartFresh}
+            className="w-full flex items-center justify-between p-3 rounded-xl bg-rose-950/25 hover:bg-rose-900/40 border border-rose-800/40 text-rose-300 text-xs font-semibold transition active-press"
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-rose-500/15 text-rose-400">
+                <Trash2 className="w-4 h-4" />
+              </div>
+              <div className="text-left">
+                <div className="font-bold text-rose-200">Erase All & Start Fresh</div>
+                <div className="text-[10px] text-rose-400/80 font-normal">
+                  Wipe all mock habits, workouts, logs & start completely clean
+                </div>
+              </div>
+            </div>
+          </button>
 
           {/* Reset Demo Data */}
           <button

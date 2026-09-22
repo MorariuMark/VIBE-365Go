@@ -20,7 +20,13 @@ import {
 } from '@/types';
 import { getFullDefaultBackup, INITIAL_MUSCLE_GROUPS, INITIAL_GYM_PROFILE } from './initialData';
 
-const STORAGE_KEY = 'vibe_tracker_app_data_v1';
+const STORAGE_KEY = 'vibe_tracker_app_data_v2';
+
+export function resetAllDataToFresh(): AppDataBackup {
+  const fresh = getFullDefaultBackup();
+  saveStoredData(fresh);
+  return fresh;
+}
 
 export function getStoredData(): AppDataBackup {
   if (typeof window === 'undefined') {
@@ -41,6 +47,7 @@ export function getStoredData(): AppDataBackup {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(fallback));
       return fallback;
     }
+
 
     // Ensure migrations for new collections
     if (!parsed.trash) parsed.trash = [];
