@@ -11,6 +11,10 @@ import {
   HabitMetric,
   HabitTargetCompletions,
   HabitBreaker,
+  TaskItem,
+  SleepLog,
+  PhotoMetadata,
+  UserSettings,
 } from '@/types';
 import {
   getStoredData,
@@ -20,6 +24,16 @@ import {
   purgeFromTrash,
   emptyTrash,
   recordAction,
+  addTask,
+  completeTask,
+  deleteTask,
+  restoreTask,
+  clearCompletedTasks,
+  saveSleepLog,
+  deleteSleepLog,
+  saveFitnessPhotoMetadata,
+  deleteFitnessPhotoMetadata,
+  updateUserSettings,
 } from '@/lib/storage';
 import { getTodayISO, formatDatePretty } from '@/lib/utils';
 import { ContributionGrid } from '@/components/habits/ContributionGrid';
@@ -32,6 +46,10 @@ import { DataManagementModal } from '@/components/common/DataManagementModal';
 import { TrashCanModal } from '@/components/common/TrashCanModal';
 import { ActionLogModal } from '@/components/common/ActionLogModal';
 import { HabitBreakerBoard } from '@/components/breakers/HabitBreakerBoard';
+import { TaskManager } from '@/components/tasks/TaskManager';
+import { SleepTracker } from '@/components/sleep/SleepTracker';
+import { DailyFitnessPhotos } from '@/components/gym/DailyFitnessPhotos';
+import { SettingsView } from '@/components/settings/SettingsView';
 import {
   Flame,
   CheckCircle2,
@@ -49,13 +67,31 @@ import {
   Trash2,
   History,
   ShieldAlert,
+  Bot,
+  Sparkles,
+  CheckSquare,
+  Moon,
+  Settings,
+  Camera,
+  Cloud,
+  CloudOff,
+  RefreshCw,
 } from 'lucide-react';
+import { AIChatView } from '@/components/chat/AIChatView';
+import {
+  CloudSyncStatus,
+  loadCloudData,
+  queueCloudSync,
+  subscribeSyncStatus,
+} from '@/lib/cloudSync';
 
-type ActiveTab = 'habits' | 'fitness' | 'breakers' | 'objectives';
-type FitnessSubTab = 'calendar' | 'matrix' | 'curves';
+type ActiveTab = 'habits' | 'fitness' | 'breakers' | 'objectives' | 'tasks' | 'sleep' | 'chat' | 'settings';
+type FitnessSubTab = 'calendar' | 'matrix' | 'curves' | 'photos';
 
 export default function Home() {
   const [data, setData] = useState<AppDataBackup | null>(null);
+  const [syncStatus, setSyncStatus] = useState<CloudSyncStatus>('idle');
+  const [lastSynced, setLastSynced] = useState<Date | undefined>(undefined);
   const [activeTab, setActiveTab] = useState<ActiveTab>('habits');
   const [fitnessSubTab, setFitnessSubTab] = useState<FitnessSubTab>('calendar');
   const [selectedDate, setSelectedDate] = useState<string>(getTodayISO());
@@ -66,21 +102,38 @@ export default function Home() {
   const [isTrashModalOpen, setIsTrashModalOpen] = useState(false);
   const [isActionLogModalOpen, setIsActionLogModalOpen] = useState(false);
 
-  // Load from local storage
+  // Load from local storage immediately, then fetch from Supabase cloud
   useEffect(() => {
     const loaded = getStoredData();
     setData(loaded);
+
+    // Seamlessly fetch cloud state and merge
+    loadCloudData().then((cloudState) => {
+      if (cloudState) {
+        setData(cloudState);
+      }
+    });
+
+    // Subscribe to cloud sync status
+    const unsubscribe = subscribeSyncStatus((status, time) => {
+      setSyncStatus(status);
+      setLastSynced(time);
+    });
+
+    return () => unsubscribe();
   }, []);
 
-  // Save to local storage on mutation
+  // Save to local storage on mutation and debounced sync to Supabase
   const updateData = (updater: (prev: AppDataBackup) => AppDataBackup) => {
     setData((prev) => {
       if (!prev) return prev;
       const next = updater(prev);
       saveStoredData(next);
+      queueCloudSync(next);
       return next;
     });
   };
+
 
   if (!data) {
     return (
@@ -625,6 +678,69 @@ export default function Home() {
     updateData((prev) => emptyTrash(prev));
   };
 
+  // Task Handlers (Manual Task System with Auto-Archiving History)
+  const handleAddTask = (newTask: TaskItem) => {
+    updateData((prev) => addTask(prev, newTask));
+  };
+
+  const handleCompleteTask = (taskId: string) => {
+    updateData((prev) => completeTask(prev, taskId));
+  };
+
+  const handleDeleteTask = (taskId: string, fromHistory = false) => {
+    updateData((prev) => deleteTask(prev, taskId, fromHistory));
+  };
+
+  const handleRestoreTask = (taskId: string) => {
+    updateData((prev) => restoreTask(prev, taskId));
+  };
+
+  const handleClearCompletedTasks = () => {
+    updateData((prev) => clearCompletedTasks(prev));
+  };
+
+  // Sleep Handlers
+  const handleSaveSleepLog = (sleepLog: SleepLog) => {
+    updateData((prev) => saveSleepLog(prev, sleepLog));
+  };
+
+  const handleDeleteSleepLog = (dateISO: string) => {
+    updateData((prev) => deleteSleepLog(prev, dateISO));
+  };
+
+  // Fitness Photo Metadata Handlers (<1MB Optimized)
+  const handleSaveFitnessPhoto = (photoMeta: PhotoMetadata) => {
+    updateData((prev) => saveFitnessPhotoMetadata(prev, photoMeta));
+  };
+
+  const handleDeleteFitnessPhoto = (photoId: string, dateISO: string) => {
+    updateData((prev) => deleteFitnessPhotoMetadata(prev, photoId, dateISO));
+  };
+
+  // User Settings Handler
+  const handleUpdateSettings = (patch: Partial<UserSettings>) => {
+    updateData((prev) => updateUserSettings(prev, patch));
+  };
+
+  // Export / Import Backup Helpers
+  const handleExportBackup = () => {
+    if (!data) return;
+    const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(
+      JSON.stringify(data, null, 2)
+    )}`;
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute('href', jsonString);
+    downloadAnchor.setAttribute('download', `VIBE365_BACKUP_${getTodayISO()}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+  };
+
+  const handleImportBackup = (importedData: AppDataBackup) => {
+    setData(importedData);
+    saveStoredData(importedData);
+  };
+
   // Previous day weight comparison
   const getPreviousLoggedWeight = (dateStr: string): number | undefined => {
     const dates = Object.keys(data.workoutLogs)
@@ -649,27 +765,42 @@ export default function Home() {
     <div className="min-h-screen bg-[#07080c] text-slate-100 flex flex-col antialiased selection:bg-emerald-500 selection:text-black">
       {/* Precision Engineered Top Bar */}
       <header className="sticky top-0 z-40 bg-[#07080c]/90 border-b border-[#1a1f2e] backdrop-blur-xl">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
-          {/* Brand Mark & Title */}
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-8 h-8 rounded-lg bg-[#111520] border border-[#232a3e] flex items-center justify-center text-emerald-400 flex-shrink-0 shadow-inner">
-              <Activity className="w-4 h-4 stroke-[2.5]" />
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2 sm:gap-4">
+          {/* Mobile Active Section Indicator */}
+          <div className="flex md:hidden items-center gap-2 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center flex-shrink-0">
+              {activeTab === 'habits' && <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
+              {activeTab === 'fitness' && <Dumbbell className="w-4 h-4 text-blue-400" />}
+              {activeTab === 'breakers' && <ShieldAlert className="w-4 h-4 text-rose-400" />}
+              {activeTab === 'objectives' && <Target className="w-4 h-4 text-amber-400" />}
+              {activeTab === 'tasks' && <CheckSquare className="w-4 h-4 text-sky-400" />}
+              {activeTab === 'sleep' && <Moon className="w-4 h-4 text-indigo-400" />}
+              {activeTab === 'chat' && <Bot className="w-4 h-4 text-emerald-400" />}
+              {activeTab === 'settings' && <Settings className="w-4 h-4 text-purple-400" />}
             </div>
             <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="font-extrabold text-base tracking-tight text-white font-sans">
-                  VIBE <span className="text-emerald-400">365</span>
+              <div className="text-xs font-bold text-white tracking-wide capitalize truncate flex items-center gap-1.5">
+                <span>
+                  {activeTab === 'chat'
+                    ? 'AI Coach'
+                    : activeTab === 'objectives'
+                    ? 'Objectives'
+                    : activeTab}
                 </span>
-                <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-mono font-medium px-2 py-0.5 rounded-full bg-emerald-950/60 text-emerald-400 border border-emerald-800/40">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                  PERFORMANCE OS
-                </span>
+                {activeTab === 'chat' && (
+                  <span className="text-[9px] font-mono font-bold px-1 py-0.2 rounded bg-emerald-950 text-emerald-400 border border-emerald-700/50">
+                    LIVE
+                  </span>
+                )}
               </div>
+              <p className="text-[10px] font-mono text-slate-500 truncate">
+                {selectedDate === getTodayISO() ? 'TODAY' : selectedDate}
+              </p>
             </div>
           </div>
 
-          {/* Unified Architectural Segmented Capsule Nav */}
-          <nav className="hidden md:flex items-center bg-[#0d1017] p-1 rounded-xl border border-[#1b2030]">
+          {/* Desktop 6 Core Sections Segmented Capsule Nav */}
+          <nav className="hidden md:flex items-center bg-[#0d1017] p-1 rounded-xl border border-[#1b2030] overflow-x-auto scrollbar-none">
             <button
               type="button"
               onClick={() => setActiveTab('habits')}
@@ -733,15 +864,95 @@ export default function Home() {
                 {data.objectives.length}
               </span>
             </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('tasks')}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                activeTab === 'tasks'
+                  ? 'bg-[#1a2133] text-white border border-[#2e3752] shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <CheckSquare className="w-3.5 h-3.5 text-sky-400" />
+              <span>Tasks</span>
+              {(data.tasks || []).length > 0 && (
+                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-sky-950/80 text-sky-300 border border-sky-800/40">
+                  {(data.tasks || []).length}
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('sleep')}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                activeTab === 'sleep'
+                  ? 'bg-[#1a2133] text-white border border-[#2e3752] shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Moon className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Sleep</span>
+              {data.sleepLogs?.[selectedDate] && (
+                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-indigo-950/80 text-indigo-300 border border-indigo-800/40">
+                  {data.sleepLogs[selectedDate].durationHours}h
+                </span>
+              )}
+            </button>
           </nav>
 
-          {/* Right Action Strip */}
-          <div className="flex items-center gap-2 sm:gap-2.5 flex-shrink-0">
+          {/* Top Right Permanent Actions Strip (AI Coach, Settings, Workout, Logs, Trash, Sync) */}
+          <div className="flex items-center gap-1.5 sm:gap-2.5 flex-shrink-0">
+            {/* Permanent AI Coach in Top Right Corner */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('chat')}
+              className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border shadow-sm active-press ${
+                activeTab === 'chat'
+                  ? 'bg-emerald-500 text-slate-950 border-emerald-400 font-bold'
+                  : 'bg-[#0d1017] hover:bg-[#131b26] text-emerald-400 border-emerald-800/50 hover:border-emerald-600/60'
+              }`}
+              title="Open AI Coach"
+            >
+              <Bot className="w-3.5 h-3.5 stroke-[2.2]" />
+              <span className="font-semibold hidden xs:inline">AI Coach</span>
+              <span
+                className={`text-[9px] font-mono font-bold px-1.5 py-0.2 rounded border ${
+                  activeTab === 'chat'
+                    ? 'bg-black/30 text-slate-950 border-black/20'
+                    : 'bg-emerald-950 text-emerald-400 border-emerald-700/50'
+                }`}
+              >
+                AI
+              </span>
+            </button>
+
+            {/* Permanent Settings in Top Right Corner */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('settings')}
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border shadow-sm active-press ${
+                activeTab === 'settings'
+                  ? 'bg-purple-950/80 text-purple-200 border-purple-600'
+                  : 'bg-[#0d1017] hover:bg-[#161426] text-slate-300 border-[#1c2234] hover:border-purple-800/50'
+              }`}
+              title="Settings & System Configuration"
+            >
+              <Settings
+                className={`w-3.5 h-3.5 ${
+                  activeTab === 'settings' ? 'text-purple-300' : 'text-purple-400'
+                }`}
+              />
+              <span className="hidden sm:inline">Settings</span>
+            </button>
+
             {/* Quick Workout Button */}
             <button
               type="button"
               onClick={() => setActiveWorkoutDate(selectedDate)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold transition shadow-sm active-press"
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold transition shadow-sm active-press"
+              title="Log Workout Session"
             >
               <Dumbbell className="w-3.5 h-3.5 stroke-[2.5]" />
               <span className="hidden sm:inline">Log Session</span>
@@ -751,13 +962,13 @@ export default function Home() {
             <button
               type="button"
               onClick={() => setIsActionLogModalOpen(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#0d1017] hover:bg-[#141924] text-slate-300 border border-[#1c2234] text-xs font-medium transition"
+              className="flex items-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-lg bg-[#0d1017] hover:bg-[#141924] text-slate-300 border border-[#1c2234] text-xs font-medium transition"
               title="View immutable action audit ledger"
             >
               <History className="w-3.5 h-3.5 text-blue-400" />
               <span className="hidden lg:inline font-mono">Logs</span>
               {auditCount > 0 && (
-                <span className="text-[9px] font-mono px-1 py-0.2 rounded bg-blue-950 text-blue-400 border border-blue-800/50 hidden sm:inline">
+                <span className="text-[9px] font-mono px-1 py-0.2 rounded bg-blue-950 text-blue-400 border border-blue-800/50 hidden md:inline">
                   {auditCount}
                 </span>
               )}
@@ -767,7 +978,7 @@ export default function Home() {
             <button
               type="button"
               onClick={() => setIsTrashModalOpen(true)}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition ${
+              className={`flex items-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-lg border text-xs font-medium transition ${
                 trashCount > 0
                   ? 'bg-rose-950/30 text-rose-300 border-rose-800/40 hover:bg-rose-900/40'
                   : 'bg-[#0d1017] hover:bg-[#141924] text-slate-400 border-[#1c2234]'
@@ -783,16 +994,41 @@ export default function Home() {
               )}
             </button>
 
-            {/* Backup & JSON Modal */}
+            {/* Supabase Cloud Sync Status Button */}
             <button
               type="button"
               onClick={() => setIsDataModalOpen(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#0d1017] hover:bg-[#141924] text-slate-300 border border-[#1c2234] text-xs font-medium transition"
-              title="Backup database and JSON sync"
+              className={`flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-lg border text-xs font-medium transition ${
+                syncStatus === 'synced'
+                  ? 'bg-emerald-950/20 text-emerald-300 border-emerald-800/40 hover:bg-emerald-900/30'
+                  : syncStatus === 'syncing'
+                  ? 'bg-amber-950/20 text-amber-300 border-amber-800/40 hover:bg-amber-900/30'
+                  : syncStatus === 'offline'
+                  ? 'bg-slate-900/60 text-slate-400 border-slate-700/50 hover:bg-slate-800/50'
+                  : 'bg-[#0d1017] hover:bg-[#141924] text-slate-300 border-[#1c2234]'
+              }`}
+              title={
+                syncStatus === 'synced'
+                  ? `Cloud Synced${lastSynced ? ` at ${lastSynced.toLocaleTimeString()}` : ''}`
+                  : syncStatus === 'syncing'
+                  ? 'Syncing changes to Supabase cloud...'
+                  : syncStatus === 'offline'
+                  ? 'Offline / Local cache mode'
+                  : 'Supabase Cloud Sync & Backup'
+              }
             >
-              <Database className="w-3.5 h-3.5 text-slate-400" />
-              <span className="hidden sm:inline font-mono">Sync</span>
+              {syncStatus === 'syncing' ? (
+                <RefreshCw className="w-3.5 h-3.5 text-amber-400 animate-spin" />
+              ) : syncStatus === 'synced' ? (
+                <Cloud className="w-3.5 h-3.5 text-emerald-400" />
+              ) : (
+                <CloudOff className="w-3.5 h-3.5 text-slate-400" />
+              )}
+              <span className="hidden sm:inline font-mono">
+                {syncStatus === 'synced' ? 'Synced' : syncStatus === 'syncing' ? 'Syncing' : 'Cloud'}
+              </span>
             </button>
+
           </div>
         </div>
       </header>
@@ -882,7 +1118,7 @@ export default function Home() {
       </section>
 
       {/* Main Content Viewport */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 flex-1 w-full space-y-6 sm:space-y-8 mb-16 md:mb-6">
+      <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-5 sm:py-8 flex-1 w-full space-y-6 sm:space-y-8 pb-28 md:pb-8">
         {/* TAB 1: HABITS */}
         {activeTab === 'habits' && (
           <div className="space-y-6">
@@ -959,6 +1195,30 @@ export default function Home() {
                 <TrendingUp className="w-3.5 h-3.5 text-amber-400" />
                 <span>Strength Curves & 1RM</span>
               </button>
+
+              <button
+                type="button"
+                onClick={() => setFitnessSubTab('photos')}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                  fitnessSubTab === 'photos'
+                    ? 'bg-[#1a2133] text-white border border-[#2e3752]'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Camera className="w-3.5 h-3.5 text-blue-400" />
+                <span>Physique Photos (&lt;1MB)</span>
+                {Object.values(data.fitnessPhotos || {}).reduce(
+                  (acc, list) => acc + (Array.isArray(list) ? list.length : 0),
+                  0
+                ) > 0 && (
+                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-blue-950/80 text-blue-300 border border-blue-800/40">
+                    {Object.values(data.fitnessPhotos || {}).reduce(
+                      (acc, list) => acc + (Array.isArray(list) ? list.length : 0),
+                      0
+                    )}
+                  </span>
+                )}
+              </button>
             </div>
 
             {fitnessSubTab === 'calendar' && (
@@ -1023,6 +1283,16 @@ export default function Home() {
                 />
               </div>
             )}
+
+            {fitnessSubTab === 'photos' && (
+              <DailyFitnessPhotos
+                selectedDate={selectedDate}
+                onSelectDate={setSelectedDate}
+                fitnessPhotos={data.fitnessPhotos || {}}
+                onSavePhotoMetadata={handleSaveFitnessPhoto}
+                onDeletePhotoMetadata={handleDeleteFitnessPhoto}
+              />
+            )}
           </div>
         )}
 
@@ -1045,6 +1315,46 @@ export default function Home() {
             onUpdateProgress={handleUpdateObjectiveProgress}
             onCreateObjective={handleCreateObjective}
             onDeleteObjective={handleDeleteObjective}
+          />
+        )}
+
+        {/* TAB 5: TASKS & DEADLINES (AUTO-ARCHIVING) */}
+        {activeTab === 'tasks' && (
+          <TaskManager
+            tasks={data.tasks || []}
+            completedTasks={data.completedTasks || []}
+            onAddTask={handleAddTask}
+            onCompleteTask={handleCompleteTask}
+            onDeleteTask={handleDeleteTask}
+            onRestoreTask={handleRestoreTask}
+            onClearCompletedTasks={handleClearCompletedTasks}
+          />
+        )}
+
+        {/* TAB 6: SLEEP & RECOVERY */}
+        {activeTab === 'sleep' && (
+          <SleepTracker
+            selectedDate={selectedDate}
+            onSelectDate={setSelectedDate}
+            sleepLogs={data.sleepLogs || {}}
+            onSaveSleepLog={handleSaveSleepLog}
+            onDeleteSleepLog={handleDeleteSleepLog}
+            targetSleepHours={data.settings?.sleepTargetHours || 8.0}
+          />
+        )}
+
+        {/* TAB 7: AI COACH INTELLIGENCE */}
+        {activeTab === 'chat' && (
+          <AIChatView appData={data} selectedDate={selectedDate} />
+        )}
+
+        {/* TAB 8: SYSTEM SETTINGS & PREFERENCES */}
+        {activeTab === 'settings' && (
+          <SettingsView
+            appData={data}
+            onUpdateSettings={handleUpdateSettings}
+            onExportBackup={handleExportBackup}
+            onImportBackup={handleImportBackup}
           />
         )}
       </main>
@@ -1087,53 +1397,78 @@ export default function Home() {
         <DataManagementModal
           onClose={() => setIsDataModalOpen(false)}
           onDataLoaded={(newData) => setData(newData)}
+          currentData={data}
+          syncStatus={syncStatus}
+          lastSynced={lastSynced}
         />
       )}
 
-      {/* Mobile Floating Bottom Dock */}
-      <div className="fixed bottom-0 inset-x-0 z-40 md:hidden bg-[#090b10]/95 border-t border-[#1c2234] backdrop-blur-xl p-1.5 flex items-center justify-around">
+      {/* Mobile Floating Bottom Dock (Strictly 6 Core Sections with Safe-Area insets) */}
+      <div className="fixed bottom-0 inset-x-0 z-40 md:hidden bg-[#090b10]/95 border-t border-[#1c2234] backdrop-blur-xl px-1.5 pt-1.5 pb-[max(0.6rem,env(safe-area-inset-bottom))] grid grid-cols-6 gap-1 shadow-2xl">
         <button
           type="button"
           onClick={() => setActiveTab('habits')}
-          className={`flex-1 flex flex-col items-center py-2 rounded-xl text-xs font-semibold transition active-press ${
-            activeTab === 'habits' ? 'text-emerald-400 bg-emerald-500/10' : 'text-slate-400'
+          className={`flex flex-col items-center justify-center py-1.5 rounded-xl text-xs font-semibold transition active-press ${
+            activeTab === 'habits' ? 'text-emerald-400 bg-emerald-500/10' : 'text-slate-400 hover:text-slate-200'
           }`}
         >
           <CheckCircle2 className="w-4 h-4" />
-          <span className="text-[10px] mt-1 font-mono">Habits</span>
+          <span className="text-[9px] mt-1 font-mono">Habits</span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab('fitness')}
-          className={`flex-1 flex flex-col items-center py-2 rounded-xl text-xs font-semibold transition active-press ${
-            activeTab === 'fitness' ? 'text-blue-400 bg-blue-500/10' : 'text-slate-400'
+          className={`flex flex-col items-center justify-center py-1.5 rounded-xl text-xs font-semibold transition active-press ${
+            activeTab === 'fitness' ? 'text-blue-400 bg-blue-500/10' : 'text-slate-400 hover:text-slate-200'
           }`}
         >
           <Dumbbell className="w-4 h-4" />
-          <span className="text-[10px] mt-1 font-mono">Fitness</span>
+          <span className="text-[9px] mt-1 font-mono">Fitness</span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab('breakers')}
-          className={`flex-1 flex flex-col items-center py-2 rounded-xl text-xs font-semibold transition active-press ${
-            activeTab === 'breakers' ? 'text-rose-400 bg-rose-500/10' : 'text-slate-400'
+          className={`flex flex-col items-center justify-center py-1.5 rounded-xl text-xs font-semibold transition active-press ${
+            activeTab === 'breakers' ? 'text-rose-400 bg-rose-500/10' : 'text-slate-400 hover:text-slate-200'
           }`}
         >
           <ShieldAlert className="w-4 h-4" />
-          <span className="text-[10px] mt-1 font-mono">Breakers</span>
+          <span className="text-[9px] mt-1 font-mono">Breakers</span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab('objectives')}
-          className={`flex-1 flex flex-col items-center py-2 rounded-xl text-xs font-semibold transition active-press ${
-            activeTab === 'objectives' ? 'text-amber-400 bg-amber-500/10' : 'text-slate-400'
+          className={`flex flex-col items-center justify-center py-1.5 rounded-xl text-xs font-semibold transition active-press ${
+            activeTab === 'objectives' ? 'text-amber-400 bg-amber-500/10' : 'text-slate-400 hover:text-slate-200'
           }`}
         >
           <Target className="w-4 h-4" />
-          <span className="text-[10px] mt-1 font-mono">Goals</span>
+          <span className="text-[9px] mt-1 font-mono">Goals</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('tasks')}
+          className={`flex flex-col items-center justify-center py-1.5 rounded-xl text-xs font-semibold transition active-press ${
+            activeTab === 'tasks' ? 'text-sky-400 bg-sky-500/10' : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <CheckSquare className="w-4 h-4" />
+          <span className="text-[9px] mt-1 font-mono">Tasks</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('sleep')}
+          className={`flex flex-col items-center justify-center py-1.5 rounded-xl text-xs font-semibold transition active-press ${
+            activeTab === 'sleep' ? 'text-indigo-400 bg-indigo-500/10' : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <Moon className="w-4 h-4" />
+          <span className="text-[9px] mt-1 font-mono">Sleep</span>
         </button>
       </div>
 

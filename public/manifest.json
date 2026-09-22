@@ -1,0 +1,18 @@
+{
+  "name": "VIBE 365 | Performance OS",
+  "short_name": "VIBE 365",
+  "description": "Athletic performance, habit tracking, and progressive overload fitness operating system",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#07080c",
+  "theme_color": "#07080c",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

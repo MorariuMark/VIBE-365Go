@@ -191,7 +191,15 @@ export type ActionType =
   | 'breaker_log'
   | 'breaker_delete'
   | 'breaker_restore'
-  | 'trash_purge';
+  | 'trash_purge'
+  | 'task_create'
+  | 'task_complete'
+  | 'task_delete'
+  | 'task_restore'
+  | 'sleep_log'
+  | 'photo_upload'
+  | 'photo_delete'
+  | 'settings_update';
 
 export interface ActionLog {
   id: string;
@@ -201,6 +209,80 @@ export interface ActionLog {
   entityTitle: string;
   details: string; // Human-readable description of the exact mutation
   metadata?: Record<string, any>;
+}
+
+// -------------------------------------------------------------
+// Tasks & Deadlines (Manual Task System with Auto-Archiving)
+// -------------------------------------------------------------
+export type TaskPriority = 'low' | 'medium' | 'high';
+
+export interface TaskItem {
+  id: string;
+  title: string;
+  deadline: string; // "YYYY-MM-DD"
+  completed: boolean;
+  createdAt: string; // ISO date
+  completedAt?: string; // ISO date when completed
+  priority?: TaskPriority;
+  notes?: string;
+}
+
+// -------------------------------------------------------------
+// Sleep Tracking System
+// -------------------------------------------------------------
+export interface SleepLog {
+  dateISO: string; // "YYYY-MM-DD"
+  durationHours: number; // e.g. 7.5
+  durationMinutesTotal: number; // e.g. 450
+  bedtime: string; // "23:15" (24h format)
+  wakeTime: string; // "07:15" (24h format)
+  qualityScore?: number; // 1 to 100 or 1 to 5
+  notes?: string;
+  photoIds?: string[]; // IDs pointing to photo vault
+  updatedAt: string;
+}
+
+// -------------------------------------------------------------
+// Visual Progress & Photo Metadata (<1MB Optimized)
+// -------------------------------------------------------------
+export type PhotoCategory = 'fitness' | 'sleep' | 'workout';
+
+export interface PhotoMetadata {
+  id: string;
+  dateISO: string; // "YYYY-MM-DD"
+  uploadedAt: string; // ISO string with exact hour:min:sec
+  originalSizeKB: number;
+  compressedSizeKB: number; // strictly < 1024 KB
+  width: number;
+  height: number;
+  mimeType: string;
+  category: PhotoCategory;
+  caption?: string;
+  publicUrl?: string; // Direct cloud image URL from Supabase Storage
+  storagePath?: string; // Bucket object path
+}
+
+
+// -------------------------------------------------------------
+// User Settings & App Preferences
+// -------------------------------------------------------------
+export interface UserSettings {
+  userName: string;
+  theme: 'cyber-dark' | 'midnight' | 'stealth';
+  sleepTargetHours: number; // e.g. 8.0
+  targetBedtime: string; // "23:00"
+  targetWakeTime: string; // "07:00"
+  autoArchiveTasksAfterDays: number;
+  defaultLLMProvider: 'groq' | 'gemini' | 'openrouter' | 'nvidia' | 'ollama';
+  defaultModelId: string;
+  autoFallbackEnabled: boolean;
+  customApiKeys?: {
+    groq?: string;
+    openrouter?: string;
+    gemini?: string;
+    nvidia?: string;
+    ollamaUrl?: string;
+  };
 }
 
 // -------------------------------------------------------------
@@ -217,4 +299,9 @@ export interface AppDataBackup {
   trash: TrashItem[]; // 30-day soft-delete retention
   habitBreakers: HabitBreaker[]; // Habit elimination engine
   actionLogs: ActionLog[]; // Immutable datetime audit trail
+  tasks: TaskItem[]; // Active pending tasks
+  completedTasks: TaskItem[]; // Lightweight archived task history
+  sleepLogs: Record<string, SleepLog>; // dateISO -> sleep log
+  fitnessPhotos: Record<string, PhotoMetadata[]>; // dateISO -> photo metadata list
+  settings?: UserSettings;
 }

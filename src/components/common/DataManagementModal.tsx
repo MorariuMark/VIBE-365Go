@@ -12,20 +12,67 @@ import {
   Database,
   CheckCircle2,
   AlertTriangle,
+  Cloud,
+  CloudOff,
+  RefreshCw,
 } from 'lucide-react';
+import { CloudSyncStatus, saveCloudDataImmediate, loadCloudData } from '@/lib/cloudSync';
 
 interface DataManagementModalProps {
   onClose: () => void;
   onDataLoaded: (newData: AppDataBackup) => void;
+  currentData?: AppDataBackup;
+  syncStatus?: CloudSyncStatus;
+  lastSynced?: Date;
 }
 
 export const DataManagementModal: React.FC<DataManagementModalProps> = ({
   onClose,
   onDataLoaded,
+  currentData,
+  syncStatus = 'idle',
+  lastSynced,
 }) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isCloudBusy, setIsCloudBusy] = useState(false);
+
+  const handleCloudPush = async () => {
+    if (!currentData) return;
+    setIsCloudBusy(true);
+    setErrorMessage(null);
+    try {
+      const ok = await saveCloudDataImmediate(currentData);
+      if (ok) {
+        setSuccessMessage('Successfully pushed latest data to Supabase cloud.');
+      } else {
+        setErrorMessage('Cloud push failed. Make sure you ran supabase_setup.sql in Supabase.');
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Cloud sync error');
+    } finally {
+      setIsCloudBusy(false);
+    }
+  };
+
+  const handleCloudPull = async () => {
+    setIsCloudBusy(true);
+    setErrorMessage(null);
+    try {
+      const cloudData = await loadCloudData();
+      if (cloudData) {
+        onDataLoaded(cloudData);
+        setSuccessMessage('Successfully restored state from Supabase cloud.');
+      } else {
+        setErrorMessage('No cloud record found yet or table not ready. Run supabase_setup.sql in Supabase.');
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Cloud pull error');
+    } finally {
+      setIsCloudBusy(false);
+    }
+  };
 
   const handleExport = () => {
     try {
@@ -104,7 +151,62 @@ export const DataManagementModal: React.FC<DataManagementModalProps> = ({
           </div>
         )}
 
+        {/* Supabase Cloud Section */}
+        <div className="mb-4 p-3 rounded-xl bg-[#090d16] border border-[#1e2638]">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400">
+                <Cloud className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="text-xs font-semibold text-white">Supabase Cloud Sync</span>
+                <span className="block text-[10px] font-mono text-slate-400">
+                  Project: vzdiltjsswuqrcvzyrfn
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  syncStatus === 'synced'
+                    ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]'
+                    : syncStatus === 'syncing'
+                    ? 'bg-amber-400 animate-ping'
+                    : 'bg-slate-500'
+                }`}
+              />
+              <span className="text-[10px] font-mono text-slate-300 capitalize">{syncStatus}</span>
+            </div>
+          </div>
+
+          <p className="text-[11px] text-slate-400 mb-3">
+            Automatic real-time sync connects your mobile phone and desktop seamlessly with zero manual export/import needed.
+          </p>
+
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              disabled={isCloudBusy}
+              onClick={handleCloudPush}
+              className="flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-xs font-semibold transition disabled:opacity-50"
+            >
+              {isCloudBusy ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+              <span>Push to Cloud</span>
+            </button>
+            <button
+              type="button"
+              disabled={isCloudBusy}
+              onClick={handleCloudPull}
+              className="flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-300 text-xs font-semibold transition disabled:opacity-50"
+            >
+              {isCloudBusy ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+              <span>Pull from Cloud</span>
+            </button>
+          </div>
+        </div>
+
         <div className="space-y-2">
+
           {/* Export Button */}
           <button
             type="button"

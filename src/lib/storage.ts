@@ -13,6 +13,10 @@ import {
   HabitBreaker,
   ActionLog,
   ActionType,
+  TaskItem,
+  SleepLog,
+  PhotoMetadata,
+  UserSettings,
 } from '@/types';
 import { getFullDefaultBackup, INITIAL_MUSCLE_GROUPS, INITIAL_GYM_PROFILE } from './initialData';
 
@@ -42,6 +46,23 @@ export function getStoredData(): AppDataBackup {
     if (!parsed.trash) parsed.trash = [];
     if (!parsed.habitBreakers) parsed.habitBreakers = [];
     if (!parsed.actionLogs) parsed.actionLogs = [];
+    if (!parsed.tasks) parsed.tasks = [];
+    if (!parsed.completedTasks) parsed.completedTasks = [];
+    if (!parsed.sleepLogs) parsed.sleepLogs = {};
+    if (!parsed.fitnessPhotos) parsed.fitnessPhotos = {};
+    if (!parsed.settings) {
+      parsed.settings = {
+        userName: 'Athlete',
+        theme: 'cyber-dark',
+        sleepTargetHours: 8.0,
+        targetBedtime: '23:00',
+        targetWakeTime: '07:00',
+        autoArchiveTasksAfterDays: 30,
+        defaultLLMProvider: 'groq',
+        defaultModelId: 'openai/gpt-oss-20b',
+        autoFallbackEnabled: true,
+      };
+    }
 
     // 30-day automatic purge for expired trash items
     const nowTime = Date.now();
@@ -90,6 +111,23 @@ export function importDataFromJSON(jsonText: string): AppDataBackup {
   if (!parsed.trash) parsed.trash = [];
   if (!parsed.habitBreakers) parsed.habitBreakers = [];
   if (!parsed.actionLogs) parsed.actionLogs = [];
+  if (!parsed.tasks) parsed.tasks = [];
+  if (!parsed.completedTasks) parsed.completedTasks = [];
+  if (!parsed.sleepLogs) parsed.sleepLogs = {};
+  if (!parsed.fitnessPhotos) parsed.fitnessPhotos = {};
+  if (!parsed.settings) {
+    parsed.settings = {
+      userName: 'Athlete',
+      theme: 'cyber-dark',
+      sleepTargetHours: 8.0,
+      targetBedtime: '23:00',
+      targetWakeTime: '07:00',
+      autoArchiveTasksAfterDays: 30,
+      defaultLLMProvider: 'groq',
+      defaultModelId: 'openai/gpt-oss-20b',
+      autoFallbackEnabled: true,
+    };
+  }
 
   saveStoredData(parsed);
   return parsed;
@@ -376,3 +414,208 @@ export function calculateProgressCurve(
     },
   };
 }
+
+// -------------------------------------------------------------
+// Tasks State Handlers (Auto-Archiving History)
+// -------------------------------------------------------------
+export function addTask(data: AppDataBackup, newTask: TaskItem): AppDataBackup {
+  const next: AppDataBackup = {
+    ...data,
+    tasks: [newTask, ...(data.tasks || [])],
+  };
+  return recordAction(
+    next,
+    'task_create',
+    newTask.id,
+    newTask.title,
+    `Added task "${newTask.title}" (Due: ${newTask.deadline})`
+  );
+}
+
+export function completeTask(data: AppDataBackup, taskId: string): AppDataBackup {
+  const target = (data.tasks || []).find((t) => t.id === taskId);
+  if (!target) return data;
+
+  const completedRecord: TaskItem = {
+    ...target,
+    completed: true,
+    completedAt: new Date().toISOString(),
+  };
+
+  const remainingTasks = (data.tasks || []).filter((t) => t.id !== taskId);
+  const updatedHistory = [completedRecord, ...(data.completedTasks || [])];
+
+  const next: AppDataBackup = {
+    ...data,
+    tasks: remainingTasks,
+    completedTasks: updatedHistory,
+  };
+
+  return recordAction(
+    next,
+    'task_complete',
+    target.id,
+    target.title,
+    `Completed task "${target.title}" (Moved to history)`
+  );
+}
+
+export function deleteTask(data: AppDataBackup, taskId: string, fromHistory = false): AppDataBackup {
+  if (fromHistory) {
+    return {
+      ...data,
+      completedTasks: (data.completedTasks || []).filter((t) => t.id !== taskId),
+    };
+  }
+
+  const target = (data.tasks || []).find((t) => t.id === taskId);
+  const next: AppDataBackup = {
+    ...data,
+    tasks: (data.tasks || []).filter((t) => t.id !== taskId),
+  };
+
+  if (!target) return next;
+  return recordAction(next, 'task_delete', target.id, target.title, `Deleted task "${target.title}"`);
+}
+
+export function restoreTask(data: AppDataBackup, taskId: string): AppDataBackup {
+  const target = (data.completedTasks || []).find((t) => t.id === taskId);
+  if (!target) return data;
+
+  const restored: TaskItem = {
+    ...target,
+    completed: false,
+    completedAt: undefined,
+  };
+
+  const next: AppDataBackup = {
+    ...data,
+    tasks: [restored, ...(data.tasks || [])],
+    completedTasks: (data.completedTasks || []).filter((t) => t.id !== taskId),
+  };
+
+  return recordAction(
+    next,
+    'task_restore',
+    target.id,
+    target.title,
+    `Restored task "${target.title}" to active queue`
+  );
+}
+
+export function clearCompletedTasks(data: AppDataBackup): AppDataBackup {
+  return {
+    ...data,
+    completedTasks: [],
+  };
+}
+
+// -------------------------------------------------------------
+// Sleep Logging State Handlers
+// -------------------------------------------------------------
+export function saveSleepLog(data: AppDataBackup, sleepLog: SleepLog): AppDataBackup {
+  const next: AppDataBackup = {
+    ...data,
+    sleepLogs: {
+      ...(data.sleepLogs || {}),
+      [sleepLog.dateISO]: sleepLog,
+    },
+  };
+
+  return recordAction(
+    next,
+    'sleep_log',
+    sleepLog.dateISO,
+    `Sleep on ${sleepLog.dateISO}`,
+    `Logged ${sleepLog.durationHours} hrs sleep (${sleepLog.bedtime} - ${sleepLog.wakeTime})`
+  );
+}
+
+export function deleteSleepLog(data: AppDataBackup, dateISO: string): AppDataBackup {
+  const logs = { ...(data.sleepLogs || {}) };
+  delete logs[dateISO];
+  return { ...data, sleepLogs: logs };
+}
+
+// -------------------------------------------------------------
+// Fitness Photo Metadata State Handlers
+// -------------------------------------------------------------
+export function saveFitnessPhotoMetadata(
+  data: AppDataBackup,
+  photoMeta: PhotoMetadata
+): AppDataBackup {
+  const currentList = data.fitnessPhotos?.[photoMeta.dateISO] || [];
+  const next: AppDataBackup = {
+    ...data,
+    fitnessPhotos: {
+      ...(data.fitnessPhotos || {}),
+      [photoMeta.dateISO]: [photoMeta, ...currentList],
+    },
+  };
+
+  return recordAction(
+    next,
+    'photo_upload',
+    photoMeta.id,
+    `Photo on ${photoMeta.dateISO}`,
+    `Uploaded ${photoMeta.category} photo (${photoMeta.compressedSizeKB} KB, downscaled from ${photoMeta.originalSizeKB} KB)`
+  );
+}
+
+export function deleteFitnessPhotoMetadata(
+  data: AppDataBackup,
+  photoId: string,
+  dateISO: string
+): AppDataBackup {
+  const currentList = data.fitnessPhotos?.[dateISO] || [];
+  const updatedList = currentList.filter((p) => p.id !== photoId);
+
+  const nextPhotos = { ...(data.fitnessPhotos || {}) };
+  if (updatedList.length > 0) {
+    nextPhotos[dateISO] = updatedList;
+  } else {
+    delete nextPhotos[dateISO];
+  }
+
+  return {
+    ...data,
+    fitnessPhotos: nextPhotos,
+  };
+}
+
+// -------------------------------------------------------------
+// User Settings State Handlers
+// -------------------------------------------------------------
+export function updateUserSettings(
+  data: AppDataBackup,
+  patch: Partial<UserSettings>
+): AppDataBackup {
+  const updatedSettings: UserSettings = {
+    ...(data.settings || {
+      userName: 'Athlete',
+      theme: 'cyber-dark',
+      sleepTargetHours: 8.0,
+      targetBedtime: '23:00',
+      targetWakeTime: '07:00',
+      autoArchiveTasksAfterDays: 30,
+      defaultLLMProvider: 'groq',
+      defaultModelId: 'openai/gpt-oss-20b',
+      autoFallbackEnabled: true,
+    }),
+    ...patch,
+  };
+
+  const next: AppDataBackup = {
+    ...data,
+    settings: updatedSettings,
+  };
+
+  return recordAction(
+    next,
+    'settings_update',
+    'user_settings',
+    'User Settings',
+    'Updated user configuration & preferences'
+  );
+}
+

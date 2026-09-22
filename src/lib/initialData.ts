@@ -8,6 +8,9 @@ import {
   TrashItem,
   HabitBreaker,
   ActionLog,
+  TaskItem,
+  SleepLog,
+  UserSettings,
 } from '@/types';
 
 export const INITIAL_MUSCLE_GROUPS: MuscleGroup[] = [
@@ -835,6 +838,84 @@ export const INITIAL_ACTION_LOGS: ActionLog[] = [
   },
 ];
 
+export const INITIAL_TASKS: TaskItem[] = [
+  {
+    id: 'task_1',
+    title: 'Review weekly progressive overload numbers in IronForge',
+    deadline: '2026-09-22',
+    completed: false,
+    createdAt: '2026-09-20T10:00:00.000Z',
+    priority: 'high',
+    notes: 'Check 1RM curves for Chest Press & Squats.',
+  },
+  {
+    id: 'task_2',
+    title: 'Prep clean high-protein meals for the upcoming 3 days',
+    deadline: '2026-09-23',
+    completed: false,
+    createdAt: '2026-09-21T08:30:00.000Z',
+    priority: 'medium',
+    notes: 'Chicken breast, brown rice, broccoli.',
+  },
+  {
+    id: 'task_3',
+    title: 'Schedule foam rolling & mobility recovery session',
+    deadline: '2026-09-25',
+    completed: false,
+    createdAt: '2026-09-21T14:15:00.000Z',
+    priority: 'low',
+  },
+];
+
+export const INITIAL_COMPLETED_TASKS: TaskItem[] = [
+  {
+    id: 'task_done_1',
+    title: 'Set up VIBE AI LLM providers and fallback cascade',
+    deadline: '2026-09-21',
+    completed: true,
+    createdAt: '2026-09-20T12:00:00.000Z',
+    completedAt: '2026-09-21T21:00:00.000Z',
+    priority: 'high',
+  },
+];
+
+export const INITIAL_SLEEP_LOGS: Record<string, SleepLog> = {
+  '2026-09-20': {
+    dateISO: '2026-09-20',
+    durationHours: 7.75,
+    durationMinutesTotal: 465,
+    bedtime: '23:15',
+    wakeTime: '07:00',
+    qualityScore: 88,
+    notes: 'Deep restful sleep. 90 minutes of REM, cold room at 19°C.',
+    photoIds: [],
+    updatedAt: '2026-09-21T07:10:00.000Z',
+  },
+  '2026-09-21': {
+    dateISO: '2026-09-21',
+    durationHours: 8.0,
+    durationMinutesTotal: 480,
+    bedtime: '23:00',
+    wakeTime: '07:00',
+    qualityScore: 92,
+    notes: 'Optimal recovery score. Felt energized for morning training.',
+    photoIds: [],
+    updatedAt: '2026-09-21T07:05:00.000Z',
+  },
+};
+
+export const INITIAL_SETTINGS: UserSettings = {
+  userName: 'Athlete',
+  theme: 'cyber-dark',
+  sleepTargetHours: 8.0,
+  targetBedtime: '23:00',
+  targetWakeTime: '07:00',
+  autoArchiveTasksAfterDays: 30,
+  defaultLLMProvider: 'groq',
+  defaultModelId: 'openai/gpt-oss-20b',
+  autoFallbackEnabled: true,
+};
+
 export function getFullDefaultBackup(): AppDataBackup {
   return {
     version: '1.0.0',
@@ -847,5 +928,10 @@ export function getFullDefaultBackup(): AppDataBackup {
     trash: INITIAL_TRASH,
     habitBreakers: INITIAL_HABIT_BREAKERS,
     actionLogs: INITIAL_ACTION_LOGS,
+    tasks: INITIAL_TASKS,
+    completedTasks: INITIAL_COMPLETED_TASKS,
+    sleepLogs: INITIAL_SLEEP_LOGS,
+    fitnessPhotos: {},
+    settings: INITIAL_SETTINGS,
   };
 }
