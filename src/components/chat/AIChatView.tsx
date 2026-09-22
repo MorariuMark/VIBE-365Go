@@ -198,14 +198,20 @@ export const AIChatView: React.FC<AIChatViewProps> = ({ appData, selectedDate })
     }
 
     try {
+      const mergedKeys = {
+        ...(appData.settings?.customApiKeys || {}),
+        ...customKeys,
+      };
+
       const payload: ChatApiRequest = {
         messages: newHistory.map((m) => ({ role: m.role, content: m.content })),
         provider: selectedProvider,
         modelId: selectedModelId,
         contextText,
         enableFallback,
-        customKeys,
+        customKeys: mergedKeys,
       };
+
 
       const res = await fetch('/api/chat', {
         method: 'POST',
