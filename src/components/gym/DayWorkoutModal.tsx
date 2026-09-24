@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   WorkoutDayLog,
   MuscleGroup,
@@ -80,6 +80,75 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
     workout?.bodyWeightKg !== undefined ? String(workout.bodyWeightKg) : ''
   );
   const [completed, setCompleted] = useState<boolean>(workout?.completed || false);
+  const [lastAutoSavedAt, setLastAutoSavedAt] = useState<string | null>(null);
+
+  // Auto-save refs and state tracking
+  const onSaveRef = useRef(onSaveWorkout);
+  onSaveRef.current = onSaveWorkout;
+
+  const stateRef = useRef({
+    title,
+    splitType,
+    activeMuscleGroupIds,
+    exercises,
+    notes,
+    bodyWeightKg,
+    completed,
+  });
+  stateRef.current = {
+    title,
+    splitType,
+    activeMuscleGroupIds,
+    exercises,
+    notes,
+    bodyWeightKg,
+    completed,
+  };
+
+  const persistWorkout = (
+    currentTitle = stateRef.current.title,
+    currentSplit = stateRef.current.splitType,
+    currentGroups = stateRef.current.activeMuscleGroupIds,
+    currentExercises = stateRef.current.exercises,
+    currentNotes = stateRef.current.notes,
+    currentWeight = stateRef.current.bodyWeightKg,
+    currentCompleted = stateRef.current.completed
+  ) => {
+    const numericWeight = currentWeight ? parseFloat(currentWeight) : undefined;
+    const updated: WorkoutDayLog = {
+      id: workout?.id || `workout_${dateISO}`,
+      dateISO,
+      title: currentTitle.trim() || `${currentSplit.toUpperCase()} Workout`,
+      notes: currentNotes.trim() || undefined,
+      splitType: currentSplit,
+      muscleGroups: currentGroups,
+      exercises: currentExercises,
+      bodyWeightKg: numericWeight,
+      completed: currentCompleted,
+    };
+    onSaveRef.current(updated);
+    setLastAutoSavedAt(
+      new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    );
+  };
+
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const debouncedPersist = (overrides?: Partial<typeof stateRef.current>) => {
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(() => {
+      const cur = { ...stateRef.current, ...overrides };
+      persistWorkout(cur.title, cur.splitType, cur.activeMuscleGroupIds, cur.exercises, cur.notes, cur.bodyWeightKg, cur.completed);
+    }, 350);
+  };
+
+  // Flush on unmount to make sure no intermediate inputs or sets are lost
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+      const s = stateRef.current;
+      persistWorkout(s.title, s.splitType, s.activeMuscleGroupIds, s.exercises, s.notes, s.bodyWeightKg, s.completed);
+    };
+  }, []);
 
   // Modal UI state for adding custom muscle group
   const [showAddGroupModal, setShowAddGroupModal] = useState(false);
@@ -95,15 +164,20 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
     setSplitType(newSplit);
     const defaults = getDefaultGroupsForSplit(newSplit);
     setActiveMuscleGroupIds(defaults);
-    if (!workout?.title || workout.title.endsWith('Session')) {
-      setTitle(`${newSplit.charAt(0).toUpperCase() + newSplit.slice(1)} Session`);
+    let nextTitle = title;
+    if (!workout?.title || workout.title.endsWith('Session') || workout.title.endsWith('Workout')) {
+      nextTitle = `${newSplit.charAt(0).toUpperCase() + newSplit.slice(1)} Session`;
+      setTitle(nextTitle);
     }
+    persistWorkout(nextTitle, newSplit, defaults, exercises, notes, bodyWeightKg, completed);
   };
 
   // Adding existing muscle group to today's session
   const handleAddExistingGroupToDay = (groupId: string) => {
     if (!activeMuscleGroupIds.includes(groupId)) {
-      setActiveMuscleGroupIds([...activeMuscleGroupIds, groupId]);
+      const nextGroups = [...activeMuscleGroupIds, groupId];
+      setActiveMuscleGroupIds(nextGroups);
+      persistWorkout(title, splitType, nextGroups, exercises, notes, bodyWeightKg, completed);
     }
   };
 
@@ -118,13 +192,17 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
       isGroupPermanent
     );
 
-    setActiveMuscleGroupIds((prev) => [...prev, created.id]);
+    const nextGroups = [...activeMuscleGroupIds, created.id];
+    setActiveMuscleGroupIds(nextGroups);
     setNewGroupName('');
     setShowAddGroupModal(false);
+    persistWorkout(title, splitType, nextGroups, exercises, notes, bodyWeightKg, completed);
   };
 
   const handleRemoveGroupFromDay = (groupId: string) => {
-    setActiveMuscleGroupIds(activeMuscleGroupIds.filter((id) => id !== groupId));
+    const nextGroups = activeMuscleGroupIds.filter((id) => id !== groupId);
+    setActiveMuscleGroupIds(nextGroups);
+    persistWorkout(title, splitType, nextGroups, exercises, notes, bodyWeightKg, completed);
   };
 
   // Sticky exercise creation: adds to permanent library of that muscle group
@@ -170,64 +248,68 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
       ],
       notes: '',
     };
-    setExercises([...exercises, newLogged]);
+    const nextExercises = [...exercises, newLogged];
+    setExercises(nextExercises);
+    persistWorkout(title, splitType, activeMuscleGroupIds, nextExercises, notes, bodyWeightKg, completed);
   };
 
   const handleRemoveExerciseFromWorkout = (loggedId: string) => {
-    setExercises(exercises.filter((e) => e.id !== loggedId));
+    const nextExercises = exercises.filter((e) => e.id !== loggedId);
+    setExercises(nextExercises);
+    persistWorkout(title, splitType, activeMuscleGroupIds, nextExercises, notes, bodyWeightKg, completed);
   };
 
   // Set management
   const handleAddSet = (exerciseId: string) => {
-    setExercises(
-      exercises.map((ex) => {
-        if (ex.id !== exerciseId) return ex;
-        const lastSet = ex.sets[ex.sets.length - 1];
-        const newSetNumber = ex.sets.length + 1;
-        const newSet: GymSet = {
-          id: `set_${Date.now()}_${newSetNumber}`,
-          setNumber: newSetNumber,
-          weightKg: lastSet ? lastSet.weightKg : 60,
-          reps: lastSet ? lastSet.reps : 10,
-          completed: false,
-          isDropSet: false,
-        };
-        return { ...ex, sets: [...ex.sets, newSet] };
-      })
-    );
+    const nextExercises = exercises.map((ex) => {
+      if (ex.id !== exerciseId) return ex;
+      const lastSet = ex.sets[ex.sets.length - 1];
+      const newSetNumber = ex.sets.length + 1;
+      const newSet: GymSet = {
+        id: `set_${Date.now()}_${newSetNumber}`,
+        setNumber: newSetNumber,
+        weightKg: lastSet ? lastSet.weightKg : 60,
+        reps: lastSet ? lastSet.reps : 10,
+        completed: false,
+        isDropSet: false,
+      };
+      return { ...ex, sets: [...ex.sets, newSet] };
+    });
+    setExercises(nextExercises);
+    persistWorkout(title, splitType, activeMuscleGroupIds, nextExercises, notes, bodyWeightKg, completed);
   };
 
   const handleDuplicateSet = (exerciseId: string, setIndex: number) => {
-    setExercises(
-      exercises.map((ex) => {
-        if (ex.id !== exerciseId) return ex;
-        const setToDuplicate = ex.sets[setIndex];
-        if (!setToDuplicate) return ex;
-        const newSetNumber = ex.sets.length + 1;
-        const duplicated: GymSet = {
-          ...setToDuplicate,
-          id: `set_${Date.now()}_${newSetNumber}`,
-          setNumber: newSetNumber,
-          completed: false,
-          dropSet: setToDuplicate.dropSet ? { ...setToDuplicate.dropSet } : undefined,
-        };
-        return { ...ex, sets: [...ex.sets, duplicated] };
-      })
-    );
+    const nextExercises = exercises.map((ex) => {
+      if (ex.id !== exerciseId) return ex;
+      const setToDuplicate = ex.sets[setIndex];
+      if (!setToDuplicate) return ex;
+      const newSetNumber = ex.sets.length + 1;
+      const duplicated: GymSet = {
+        ...setToDuplicate,
+        id: `set_${Date.now()}_${newSetNumber}`,
+        setNumber: newSetNumber,
+        completed: false,
+        dropSet: setToDuplicate.dropSet ? { ...setToDuplicate.dropSet } : undefined,
+      };
+      return { ...ex, sets: [...ex.sets, duplicated] };
+    });
+    setExercises(nextExercises);
+    persistWorkout(title, splitType, activeMuscleGroupIds, nextExercises, notes, bodyWeightKg, completed);
   };
 
   const handleDeleteSet = (exerciseId: string, setId: string) => {
-    setExercises(
-      exercises.map((ex) => {
-        if (ex.id !== exerciseId) return ex;
-        const filtered = ex.sets.filter((s) => s.id !== setId);
-        const reindexed = filtered.map((s, idx) => ({
-          ...s,
-          setNumber: idx + 1,
-        }));
-        return { ...ex, sets: reindexed };
-      })
-    );
+    const nextExercises = exercises.map((ex) => {
+      if (ex.id !== exerciseId) return ex;
+      const filtered = ex.sets.filter((s) => s.id !== setId);
+      const reindexed = filtered.map((s, idx) => ({
+        ...s,
+        setNumber: idx + 1,
+      }));
+      return { ...ex, sets: reindexed };
+    });
+    setExercises(nextExercises);
+    persistWorkout(title, splitType, activeMuscleGroupIds, nextExercises, notes, bodyWeightKg, completed);
   };
 
   const handleUpdateSet = (
@@ -235,38 +317,38 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
     setId: string,
     patch: Partial<GymSet>
   ) => {
-    setExercises(
-      exercises.map((ex) => {
-        if (ex.id !== exerciseId) return ex;
-        return {
-          ...ex,
-          sets: ex.sets.map((s) => (s.id === setId ? { ...s, ...patch } : s)),
-        };
-      })
-    );
+    const nextExercises = exercises.map((ex) => {
+      if (ex.id !== exerciseId) return ex;
+      return {
+        ...ex,
+        sets: ex.sets.map((s) => (s.id === setId ? { ...s, ...patch } : s)),
+      };
+    });
+    setExercises(nextExercises);
+    persistWorkout(title, splitType, activeMuscleGroupIds, nextExercises, notes, bodyWeightKg, completed);
   };
 
   const handleToggleDropSet = (exerciseId: string, setId: string) => {
-    setExercises(
-      exercises.map((ex) => {
-        if (ex.id !== exerciseId) return ex;
-        return {
-          ...ex,
-          sets: ex.sets.map((s) => {
-            if (s.id !== setId) return s;
-            const willEnable = !s.isDropSet;
-            const dropSetData: DropSet | undefined = willEnable
-              ? { weightKg: Math.round(s.weightKg * 0.7), reps: 5 }
-              : undefined;
-            return {
-              ...s,
-              isDropSet: willEnable,
-              dropSet: dropSetData,
-            };
-          }),
-        };
-      })
-    );
+    const nextExercises = exercises.map((ex) => {
+      if (ex.id !== exerciseId) return ex;
+      return {
+        ...ex,
+        sets: ex.sets.map((s) => {
+          if (s.id !== setId) return s;
+          const willEnable = !s.isDropSet;
+          const dropSetData: DropSet | undefined = willEnable
+            ? { weightKg: Math.round(s.weightKg * 0.7), reps: 5 }
+            : undefined;
+          return {
+            ...s,
+            isDropSet: willEnable,
+            dropSet: dropSetData,
+          };
+        }),
+      };
+    });
+    setExercises(nextExercises);
+    persistWorkout(title, splitType, activeMuscleGroupIds, nextExercises, notes, bodyWeightKg, completed);
   };
 
   const handleSaveAll = () => {
@@ -319,7 +401,11 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
               </span>
               <button
                 type="button"
-                onClick={() => setCompleted(!completed)}
+                onClick={() => {
+                  const next = !completed;
+                  setCompleted(next);
+                  persistWorkout(title, splitType, activeMuscleGroupIds, exercises, notes, bodyWeightKg, next);
+                }}
                 className={`flex items-center gap-1.5 px-3 py-0.5 rounded-md text-xs font-semibold border transition ${
                   completed
                     ? 'bg-emerald-950/80 text-emerald-400 border-emerald-800/60'
@@ -329,12 +415,27 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                 <CheckCircle2 className={`w-3.5 h-3.5 ${completed ? 'text-emerald-400' : ''}`} />
                 <span>{completed ? 'Completed' : 'Mark Done'}</span>
               </button>
+
+              <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#141a29] border border-[#222e49] text-[10px] font-mono text-emerald-400 shadow-sm">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span>Auto-saved</span>
+                {lastAutoSavedAt && (
+                  <span className="text-slate-500 hidden sm:inline">({lastAutoSavedAt})</span>
+                )}
+              </div>
             </div>
 
             <input
               type="text"
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                debouncedPersist({ title: e.target.value });
+              }}
+              onBlur={() => {
+                if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+                persistWorkout(title, splitType, activeMuscleGroupIds, exercises, notes, bodyWeightKg, completed);
+              }}
               placeholder="Assign Workout Title (e.g. Heavy Push A - PR Day)..."
               className="mt-2 text-lg sm:text-2xl font-black text-white bg-transparent border-b border-transparent hover:border-[#232a3e] focus:border-emerald-500 outline-none w-full placeholder:text-slate-600 transition tracking-tight"
             />
@@ -923,7 +1024,14 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
             <textarea
               rows={2}
               value={notes}
-              onChange={(e) => setNotes(e.target.value)}
+              onChange={(e) => {
+                setNotes(e.target.value);
+                debouncedPersist({ notes: e.target.value });
+              }}
+              onBlur={() => {
+                if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+                persistWorkout(title, splitType, activeMuscleGroupIds, exercises, notes, bodyWeightKg, completed);
+              }}
               placeholder="e.g. High energy, good pump on incline press, warm-up took 8 min..."
               className="w-full px-3 py-2 rounded-lg bg-[#090b10] border border-[#232a3e] text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500"
             />
@@ -952,7 +1060,14 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                   max="300"
                   placeholder="e.g. 79.4"
                   value={bodyWeightKg}
-                  onChange={(e) => setBodyWeightKg(e.target.value)}
+                  onChange={(e) => {
+                    setBodyWeightKg(e.target.value);
+                    debouncedPersist({ bodyWeightKg: e.target.value });
+                  }}
+                  onBlur={() => {
+                    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+                    persistWorkout(title, splitType, activeMuscleGroupIds, exercises, notes, bodyWeightKg, completed);
+                  }}
                   className="w-24 px-2.5 py-1.5 rounded-lg bg-[#090b10] border border-[#232a3e] text-sm font-mono font-bold text-amber-300 focus:outline-none focus:border-amber-500"
                 />
                 <span className="text-xs font-mono text-slate-400">kg</span>

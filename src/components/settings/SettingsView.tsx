@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { AppDataBackup, UserSettings } from '@/types';
 import { getStoredData, saveStoredData } from '@/lib/storage';
 import { clearPhotoVault } from '@/lib/photoStorage';
@@ -89,6 +89,103 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [vaultClearing, setVaultClearing] = useState(false);
   const [vaultClearedSuccess, setVaultClearedSuccess] = useState(false);
+  const [lastAutoSavedAt, setLastAutoSavedAt] = useState<string | null>(null);
+
+  const onUpdateRef = useRef(onUpdateSettings);
+  onUpdateRef.current = onUpdateSettings;
+
+  const stateRef = useRef({
+    userName,
+    theme,
+    sleepTargetHours,
+    targetBedtime,
+    targetWakeTime,
+    autoArchiveDays,
+    defaultProvider,
+    defaultModelId,
+    autoFallback,
+    groqKey,
+    openRouterKey,
+    geminiKey,
+    nvidiaKey,
+    ollamaUrl,
+  });
+  stateRef.current = {
+    userName,
+    theme,
+    sleepTargetHours,
+    targetBedtime,
+    targetWakeTime,
+    autoArchiveDays,
+    defaultProvider,
+    defaultModelId,
+    autoFallback,
+    groqKey,
+    openRouterKey,
+    geminiKey,
+    nvidiaKey,
+    ollamaUrl,
+  };
+
+  const persistSettings = (patch: Partial<UserSettings>) => {
+    onUpdateRef.current(patch);
+    setLastAutoSavedAt(
+      new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    );
+  };
+
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const debouncedPersist = (overrides?: Partial<UserSettings>) => {
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(() => {
+      const cur = stateRef.current;
+      persistSettings({
+        userName: cur.userName.trim() || 'Athlete',
+        theme: cur.theme,
+        sleepTargetHours: Number(cur.sleepTargetHours) || 8.0,
+        targetBedtime: cur.targetBedtime,
+        targetWakeTime: cur.targetWakeTime,
+        autoArchiveTasksAfterDays: Number(cur.autoArchiveDays) || 30,
+        defaultLLMProvider: cur.defaultProvider,
+        defaultModelId: cur.defaultModelId,
+        autoFallbackEnabled: cur.autoFallback,
+        customApiKeys: {
+          groq: cur.groqKey.trim() || undefined,
+          openrouter: cur.openRouterKey.trim() || undefined,
+          gemini: cur.geminiKey.trim() || undefined,
+          nvidia: cur.nvidiaKey.trim() || undefined,
+          ollamaUrl: cur.ollamaUrl.trim() || undefined,
+        },
+        ...overrides,
+      });
+    }, 350);
+  };
+
+  // Flush on unmount so switching sections immediately commits all settings
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+      const cur = stateRef.current;
+      onUpdateRef.current({
+        userName: cur.userName.trim() || 'Athlete',
+        theme: cur.theme,
+        sleepTargetHours: Number(cur.sleepTargetHours) || 8.0,
+        targetBedtime: cur.targetBedtime,
+        targetWakeTime: cur.targetWakeTime,
+        autoArchiveTasksAfterDays: Number(cur.autoArchiveDays) || 30,
+        defaultLLMProvider: cur.defaultProvider,
+        defaultModelId: cur.defaultModelId,
+        autoFallbackEnabled: cur.autoFallback,
+        customApiKeys: {
+          groq: cur.groqKey.trim() || undefined,
+          openrouter: cur.openRouterKey.trim() || undefined,
+          gemini: cur.geminiKey.trim() || undefined,
+          nvidia: cur.nvidiaKey.trim() || undefined,
+          ollamaUrl: cur.ollamaUrl.trim() || undefined,
+        },
+      });
+    };
+  }, []);
 
   // Calculate vault storage statistics
   const totalFitnessPhotos = Object.values(appData.fitnessPhotos || {}).reduce(
@@ -116,8 +213,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     totalOrigKB > 0 ? Math.round(((totalOrigKB - totalCompKB) / totalOrigKB) * 100) : 0;
 
   // Save changes
-  const handleSave = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSave = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
 
     const patch: Partial<UserSettings> = {
       userName: userName.trim() || 'Athlete',
@@ -138,7 +235,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       },
     };
 
-    onUpdateSettings(patch);
+    persistSettings(patch);
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 3000);
   };
@@ -208,23 +305,33 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={handleSave}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition shadow-lg active-press self-start sm:self-auto"
-          >
-            {savedSuccess ? (
-              <>
-                <Check className="w-4 h-4 stroke-[3]" />
-                <span>Saved Changes!</span>
-              </>
-            ) : (
-              <>
-                <Save className="w-4 h-4 stroke-[2.5]" />
-                <span>Save Settings</span>
-              </>
-            )}
-          </button>
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#141a29] border border-[#222e49] text-[10px] font-mono text-emerald-400 shadow-sm">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span>Auto-saved</span>
+              {lastAutoSavedAt && (
+                <span className="text-slate-500 hidden sm:inline">({lastAutoSavedAt})</span>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={handleSave}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition shadow-lg active-press"
+            >
+              {savedSuccess ? (
+                <>
+                  <Check className="w-4 h-4 stroke-[3]" />
+                  <span>Saved Changes!</span>
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4 stroke-[2.5]" />
+                  <span>Save Settings</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -244,7 +351,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <input
                 type="text"
                 value={userName}
-                onChange={(e) => setUserName(e.target.value)}
+                onChange={(e) => {
+                  setUserName(e.target.value);
+                  debouncedPersist({ userName: e.target.value });
+                }}
+                onBlur={() => {
+                  if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+                  persistSettings({ userName: userName.trim() || 'Athlete' });
+                }}
                 placeholder="e.g. Morariu / Elite Athlete"
                 className="w-full px-3.5 py-2.5 rounded-xl bg-[#121624] border border-[#20283d] text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-medium"
               />
@@ -257,7 +371,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </label>
               <select
                 value={theme}
-                onChange={(e) => setTheme(e.target.value as any)}
+                onChange={(e) => {
+                  const val = e.target.value as any;
+                  setTheme(val);
+                  persistSettings({ theme: val });
+                }}
                 className="w-full px-3.5 py-2.5 rounded-xl bg-[#121624] border border-[#20283d] text-xs text-white focus:outline-none focus:border-purple-500 font-medium"
               >
                 <option value="cyber-dark">Cyber Dark (Emerald &amp; Blue Accents)</option>
@@ -291,7 +409,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 min="4"
                 max="12"
                 value={sleepTargetHours}
-                onChange={(e) => setSleepTargetHours(parseFloat(e.target.value) || 8.0)}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value) || 8.0;
+                  setSleepTargetHours(val);
+                  persistSettings({ sleepTargetHours: val });
+                }}
                 className="w-full px-3.5 py-2.5 rounded-xl bg-[#121624] border border-[#20283d] text-xs text-white focus:outline-none focus:border-indigo-500 font-mono"
               />
             </div>
@@ -304,7 +426,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <input
                 type="time"
                 value={targetBedtime}
-                onChange={(e) => setTargetBedtime(e.target.value)}
+                onChange={(e) => {
+                  setTargetBedtime(e.target.value);
+                  persistSettings({ targetBedtime: e.target.value });
+                }}
                 className="w-full px-3.5 py-2.5 rounded-xl bg-[#121624] border border-[#20283d] text-xs text-white focus:outline-none focus:border-indigo-500 font-mono"
               />
             </div>
@@ -317,7 +442,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <input
                 type="time"
                 value={targetWakeTime}
-                onChange={(e) => setTargetWakeTime(e.target.value)}
+                onChange={(e) => {
+                  setTargetWakeTime(e.target.value);
+                  persistSettings({ targetWakeTime: e.target.value });
+                }}
                 className="w-full px-3.5 py-2.5 rounded-xl bg-[#121624] border border-[#20283d] text-xs text-white focus:outline-none focus:border-indigo-500 font-mono"
               />
             </div>
@@ -341,7 +469,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 min="7"
                 max="365"
                 value={autoArchiveDays}
-                onChange={(e) => setAutoArchiveDays(parseInt(e.target.value) || 30)}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value) || 30;
+                  setAutoArchiveDays(val);
+                  persistSettings({ autoArchiveTasksAfterDays: val });
+                }}
                 className="w-full px-3.5 py-2.5 rounded-xl bg-[#121624] border border-[#20283d] text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
               />
               <span className="text-[11px] text-slate-500 mt-1 block">
@@ -387,9 +519,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   const prov = e.target.value as any;
                   setDefaultProvider(prov);
                   const provModels = getModelsForProvider(prov);
+                  const nextModel = provModels.length > 0 ? provModels[0].id : defaultModelId;
                   if (provModels.length > 0) {
-                    setDefaultModelId(provModels[0].id);
+                    setDefaultModelId(nextModel);
                   }
+                  persistSettings({ defaultLLMProvider: prov, defaultModelId: nextModel });
                 }}
                 className="w-full px-3.5 py-2.5 rounded-xl bg-[#121624] border border-[#20283d] text-xs text-white focus:outline-none focus:border-emerald-500 font-semibold"
               >
@@ -407,7 +541,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </label>
               <select
                 value={defaultModelId}
-                onChange={(e) => setDefaultModelId(e.target.value)}
+                onChange={(e) => {
+                  setDefaultModelId(e.target.value);
+                  persistSettings({ defaultModelId: e.target.value });
+                }}
                 className="w-full px-3.5 py-2.5 rounded-xl bg-[#121624] border border-[#20283d] text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
               >
                 {availableModels.map((m: ModelDefinition) => (
@@ -437,7 +574,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <input
                 type="checkbox"
                 checked={autoFallback}
-                onChange={(e) => setAutoFallback(e.target.checked)}
+                onChange={(e) => {
+                  setAutoFallback(e.target.checked);
+                  persistSettings({ autoFallbackEnabled: e.target.checked });
+                }}
                 className="sr-only peer"
               />
               <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
@@ -459,7 +599,30 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <input
                   type="password"
                   value={groqKey}
-                  onChange={(e) => setGroqKey(e.target.value)}
+                  onChange={(e) => {
+                    setGroqKey(e.target.value);
+                    debouncedPersist({
+                      customApiKeys: {
+                        groq: e.target.value.trim() || undefined,
+                        openrouter: openRouterKey.trim() || undefined,
+                        gemini: geminiKey.trim() || undefined,
+                        nvidia: nvidiaKey.trim() || undefined,
+                        ollamaUrl: ollamaUrl.trim() || undefined,
+                      },
+                    });
+                  }}
+                  onBlur={() => {
+                    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+                    persistSettings({
+                      customApiKeys: {
+                        groq: groqKey.trim() || undefined,
+                        openrouter: openRouterKey.trim() || undefined,
+                        gemini: geminiKey.trim() || undefined,
+                        nvidia: nvidiaKey.trim() || undefined,
+                        ollamaUrl: ollamaUrl.trim() || undefined,
+                      },
+                    });
+                  }}
                   placeholder="Override GROQ_API_KEY"
                   className="w-full px-3 py-2 rounded-xl bg-[#121624] border border-[#20283d] text-xs text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500 font-mono"
                 />
@@ -472,7 +635,30 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <input
                   type="password"
                   value={openRouterKey}
-                  onChange={(e) => setOpenRouterKey(e.target.value)}
+                  onChange={(e) => {
+                    setOpenRouterKey(e.target.value);
+                    debouncedPersist({
+                      customApiKeys: {
+                        groq: groqKey.trim() || undefined,
+                        openrouter: e.target.value.trim() || undefined,
+                        gemini: geminiKey.trim() || undefined,
+                        nvidia: nvidiaKey.trim() || undefined,
+                        ollamaUrl: ollamaUrl.trim() || undefined,
+                      },
+                    });
+                  }}
+                  onBlur={() => {
+                    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+                    persistSettings({
+                      customApiKeys: {
+                        groq: groqKey.trim() || undefined,
+                        openrouter: openRouterKey.trim() || undefined,
+                        gemini: geminiKey.trim() || undefined,
+                        nvidia: nvidiaKey.trim() || undefined,
+                        ollamaUrl: ollamaUrl.trim() || undefined,
+                      },
+                    });
+                  }}
                   placeholder="Override OPENROUTER_API_KEY"
                   className="w-full px-3 py-2 rounded-xl bg-[#121624] border border-[#20283d] text-xs text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500 font-mono"
                 />
@@ -485,7 +671,30 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <input
                   type="password"
                   value={geminiKey}
-                  onChange={(e) => setGeminiKey(e.target.value)}
+                  onChange={(e) => {
+                    setGeminiKey(e.target.value);
+                    debouncedPersist({
+                      customApiKeys: {
+                        groq: groqKey.trim() || undefined,
+                        openrouter: openRouterKey.trim() || undefined,
+                        gemini: e.target.value.trim() || undefined,
+                        nvidia: nvidiaKey.trim() || undefined,
+                        ollamaUrl: ollamaUrl.trim() || undefined,
+                      },
+                    });
+                  }}
+                  onBlur={() => {
+                    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+                    persistSettings({
+                      customApiKeys: {
+                        groq: groqKey.trim() || undefined,
+                        openrouter: openRouterKey.trim() || undefined,
+                        gemini: geminiKey.trim() || undefined,
+                        nvidia: nvidiaKey.trim() || undefined,
+                        ollamaUrl: ollamaUrl.trim() || undefined,
+                      },
+                    });
+                  }}
                   placeholder="Override GEMINI_API_KEY"
                   className="w-full px-3 py-2 rounded-xl bg-[#121624] border border-[#20283d] text-xs text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500 font-mono"
                 />
@@ -498,7 +707,30 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <input
                   type="password"
                   value={nvidiaKey}
-                  onChange={(e) => setNvidiaKey(e.target.value)}
+                  onChange={(e) => {
+                    setNvidiaKey(e.target.value);
+                    debouncedPersist({
+                      customApiKeys: {
+                        groq: groqKey.trim() || undefined,
+                        openrouter: openRouterKey.trim() || undefined,
+                        gemini: geminiKey.trim() || undefined,
+                        nvidia: e.target.value.trim() || undefined,
+                        ollamaUrl: ollamaUrl.trim() || undefined,
+                      },
+                    });
+                  }}
+                  onBlur={() => {
+                    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+                    persistSettings({
+                      customApiKeys: {
+                        groq: groqKey.trim() || undefined,
+                        openrouter: openRouterKey.trim() || undefined,
+                        gemini: geminiKey.trim() || undefined,
+                        nvidia: nvidiaKey.trim() || undefined,
+                        ollamaUrl: ollamaUrl.trim() || undefined,
+                      },
+                    });
+                  }}
                   placeholder="Override NVIDIA_API_KEY"
                   className="w-full px-3 py-2 rounded-xl bg-[#121624] border border-[#20283d] text-xs text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500 font-mono"
                 />
@@ -511,7 +743,30 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <input
                   type="text"
                   value={ollamaUrl}
-                  onChange={(e) => setOllamaUrl(e.target.value)}
+                  onChange={(e) => {
+                    setOllamaUrl(e.target.value);
+                    debouncedPersist({
+                      customApiKeys: {
+                        groq: groqKey.trim() || undefined,
+                        openrouter: openRouterKey.trim() || undefined,
+                        gemini: geminiKey.trim() || undefined,
+                        nvidia: nvidiaKey.trim() || undefined,
+                        ollamaUrl: e.target.value.trim() || undefined,
+                      },
+                    });
+                  }}
+                  onBlur={() => {
+                    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+                    persistSettings({
+                      customApiKeys: {
+                        groq: groqKey.trim() || undefined,
+                        openrouter: openRouterKey.trim() || undefined,
+                        gemini: geminiKey.trim() || undefined,
+                        nvidia: nvidiaKey.trim() || undefined,
+                        ollamaUrl: ollamaUrl.trim() || undefined,
+                      },
+                    });
+                  }}
                   placeholder="http://localhost:11434"
                   className="w-full px-3 py-2 rounded-xl bg-[#121624] border border-[#20283d] text-xs text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500 font-mono"
                 />

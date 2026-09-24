@@ -523,7 +523,10 @@ export const HabitCard: React.FC<HabitCardProps> = ({
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
-                    onClick={() => setGoalPeriod('week')}
+                    onClick={() => {
+                      setGoalPeriod('week');
+                      onUpdateTargetCompletions(habit.id, { count: goalCount, period: 'week' });
+                    }}
                     className={`py-2 rounded-xl text-xs font-semibold border transition ${
                       goalPeriod === 'week'
                         ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/40'
@@ -534,7 +537,10 @@ export const HabitCard: React.FC<HabitCardProps> = ({
                   </button>
                   <button
                     type="button"
-                    onClick={() => setGoalPeriod('month')}
+                    onClick={() => {
+                      setGoalPeriod('month');
+                      onUpdateTargetCompletions(habit.id, { count: goalCount, period: 'month' });
+                    }}
                     className={`py-2 rounded-xl text-xs font-semibold border transition ${
                       goalPeriod === 'month'
                         ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/40'
@@ -555,7 +561,11 @@ export const HabitCard: React.FC<HabitCardProps> = ({
                   min="1"
                   max={goalPeriod === 'week' ? 7 : 31}
                   value={goalCount}
-                  onChange={(e) => setGoalCount(parseInt(e.target.value, 10) || 1)}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10) || 1;
+                    setGoalCount(val);
+                    onUpdateTargetCompletions(habit.id, { count: val, period: goalPeriod });
+                  }}
                   className="w-full px-3 py-2 rounded-xl bg-surface-2 border border-surface-border text-white text-sm tabular-nums focus:border-emerald-500"
                 />
               </div>

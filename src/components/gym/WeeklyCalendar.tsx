@@ -103,7 +103,15 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
                   min="1"
                   max="7"
                   value={tempGoal}
-                  onChange={(e) => setTempGoal(Number(e.target.value))}
+                  onChange={(e) => {
+                    const val = Number(e.target.value);
+                    setTempGoal(val);
+                    if (val >= 1 && val <= 7) {
+                      onUpdateGymProfile({ workoutsPerWeekGoal: val });
+                    }
+                  }}
+                  onBlur={() => setIsEditingGoal(false)}
+                  autoFocus
                   className="w-10 px-1 py-0.5 rounded bg-surface-1 text-white font-semibold text-xs border border-surface-border"
                 />
                 <button
@@ -114,7 +122,7 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
                   }}
                   className="text-[11px] text-emerald-400 font-semibold hover:underline"
                 >
-                  Save
+                  Done
                 </button>
               </span>
             ) : (
