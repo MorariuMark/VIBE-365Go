@@ -23,6 +23,11 @@ export const metadata: Metadata = {
     icon: '/icon.svg',
     apple: '/icon.svg',
   },
+  other: {
+    'cache-control': 'no-cache, no-store, must-revalidate',
+    'pragma': 'no-cache',
+    'expires': '0',
+  },
 };
 
 

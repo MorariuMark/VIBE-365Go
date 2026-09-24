@@ -28,6 +28,7 @@ import {
   Palette,
   AlertTriangle,
   RotateCcw,
+  RefreshCw,
 } from 'lucide-react';
 
 interface SettingsViewProps {
@@ -631,6 +632,49 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 />
               </label>
             </div>
+          </div>
+        </div>
+
+        {/* SECTION 7: SYSTEM VERSION & MOBILE CACHE PURGE */}
+        <div className="athletic-card rounded-2xl p-5 border border-purple-900/40 bg-[#0c0f1d] space-y-4">
+          <div className="flex items-center justify-between border-b border-[#1b1c36] pb-3">
+            <div className="flex items-center gap-2 text-sm font-bold text-white">
+              <RefreshCw className="w-4 h-4 text-purple-400" />
+              <span>App Build & Mobile Cache Purge</span>
+            </div>
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-purple-950/80 text-purple-300 border border-purple-800/50">
+              BUILD 2026.09.24.4 (LIVE)
+            </span>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <h4 className="text-xs font-bold text-white">Bypass Mobile Browser &amp; PWA Cache</h4>
+              <p className="text-[11px] text-slate-400">
+                If your phone or Home Screen PWA still shows an older version, tap this button to purge WebKit cache, unregister stale workers, and force-load the newest code.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  if ('serviceWorker' in navigator) {
+                    const regs = await navigator.serviceWorker.getRegistrations();
+                    for (const r of regs) await r.unregister();
+                  }
+                  if ('caches' in window) {
+                    const keys = await caches.keys();
+                    for (const k of keys) await caches.delete(k);
+                  }
+                } catch (_) {}
+                window.location.href = window.location.origin + window.location.pathname + '?v=' + Date.now();
+              }}
+              className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-purple-950/60 hover:bg-purple-900/80 text-purple-200 border border-purple-700/60 text-xs font-bold transition shadow-sm active-press whitespace-nowrap"
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-purple-400" />
+              <span>Force Reload &amp; Purge Cache</span>
+            </button>
           </div>
         </div>
 

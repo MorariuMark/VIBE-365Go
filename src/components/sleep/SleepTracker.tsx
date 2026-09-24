@@ -106,13 +106,18 @@ export const SleepTracker: React.FC<SleepTrackerProps> = ({
     photos,
   };
 
-  // Track previous selectedDate to detect date switches
-  const prevDateRef = useRef(selectedDate);
+  // Track synchronization key to reliably hydrate from currentLog and date switches
+  const lastSyncedKeyRef = useRef<string>('');
 
-  // Sync state when selectedDate changes or when currentLog updates from outside
+  // Sync state when selectedDate changes or when currentLog updates from outside (e.g. Supabase cloud load)
   useEffect(() => {
-    if (prevDateRef.current !== selectedDate) {
-      prevDateRef.current = selectedDate;
+    const logKey = currentLog
+      ? `${currentLog.updatedAt || 'saved'}_${currentLog.durationTime || ''}_${currentLog.durationHours || ''}_${currentLog.bedtime || ''}_${currentLog.wakeTime || ''}_${currentLog.qualityScore ?? ''}`
+      : 'none';
+    const syncKey = `${selectedDate}_${logKey}`;
+
+    if (lastSyncedKeyRef.current !== syncKey) {
+      lastSyncedKeyRef.current = syncKey;
       if (currentLog) {
         const parsed = parseSleepDuration(
           currentLog.durationTime || currentLog.durationMinutesTotal || currentLog.durationHours
@@ -188,11 +193,27 @@ export const SleepTracker: React.FC<SleepTrackerProps> = ({
       photoIds,
       updatedAt: new Date().toISOString(),
     };
+
+    // Pre-mark sync key so parent state reflection doesn't cause redundant re-render/re-sync
+    const logKey = `${updated.updatedAt}_${updated.durationTime}_${updated.durationHours}_${updated.bedtime}_${updated.wakeTime}_${updated.qualityScore}`;
+    lastSyncedKeyRef.current = `${selectedDate}_${logKey}`;
+
     onSaveRef.current(updated);
     setLastAutoSavedAt(
       new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
     );
   };
+
+  // Ensure any debounced pending notes are persisted when unmounting or switching tabs
+  useEffect(() => {
+    return () => {
+      if (notesDebounceRef.current) {
+        clearTimeout(notesDebounceRef.current);
+        const { bedtime: b, wakeTime: w, durationTime: d, qualityScore: q, notes: n, photos: p } = stateRef.current;
+        persistLog(b, w, d, q, n, p);
+      }
+    };
+  }, []);
 
   // Handlers with instant auto-save
   const handleBedtimeChange = (newBed: string) => {

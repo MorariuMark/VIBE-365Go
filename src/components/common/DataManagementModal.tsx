@@ -309,9 +309,43 @@ export const DataManagementModal: React.FC<DataManagementModalProps> = ({
               </div>
             </div>
           </button>
+
+          {/* Force App Update & Cache Clear */}
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                if ('serviceWorker' in navigator) {
+                  const regs = await navigator.serviceWorker.getRegistrations();
+                  for (const r of regs) await r.unregister();
+                }
+                if ('caches' in window) {
+                  const keys = await caches.keys();
+                  for (const k of keys) await caches.delete(k);
+                }
+              } catch (_) {}
+              window.location.href = window.location.origin + window.location.pathname + '?v=' + Date.now();
+            }}
+            className="w-full flex items-center justify-between p-3 rounded-xl bg-purple-950/25 hover:bg-purple-900/40 border border-purple-800/40 text-purple-300 text-xs font-semibold transition active-press"
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-purple-500/15 text-purple-400">
+                <RefreshCw className="w-4 h-4" />
+              </div>
+              <div className="text-left">
+                <div className="font-bold text-purple-200">Force Reload & Clear Mobile Cache</div>
+                <div className="text-[10px] text-purple-400/80 font-normal">
+                  Bypass phone browser/PWA cache and fetch latest version
+                </div>
+              </div>
+            </div>
+          </button>
         </div>
 
-        <div className="mt-4 pt-3 border-t border-surface-border flex justify-end">
+        <div className="mt-4 pt-3 border-t border-surface-border flex items-center justify-between">
+          <span className="text-[10px] font-mono text-slate-500">
+            Build: 2026.09.24.4 (Live)
+          </span>
           <button
             type="button"
             onClick={onClose}
