@@ -1,6 +1,6 @@
 import { AppDataBackup } from '@/types';
 import { ContextOptions, ContextPayload } from './types';
-import { getTodayISO } from '@/lib/utils';
+import { getTodayISO, formatSleepDisplay } from '@/lib/utils';
 
 /**
  * Computes start and end ISO dates based on the requested timeframe.
@@ -418,8 +418,9 @@ export function buildAppContext(data: AppDataBackup, options: ContextOptions): C
       lines.push(`- Average Sleep: **${avgHours} hrs/night** (Target: ${data.settings?.sleepTargetHours || 8.0} hrs)`);
 
       sleepInRange.slice(0, 7).forEach(([date, log]) => {
+        const durStr = formatSleepDisplay(log.durationHours, log.durationMinutesTotal, log.durationTime);
         lines.push(
-          `- **${date}**: **${log.durationHours || 0}h** sleep (${log.bedtime || '--:--'} → ${log.wakeTime || '--:--'})${
+          `- **${date}**: **${durStr}** sleep (${log.bedtime || '--:--'} → ${log.wakeTime || '--:--'})${
             log.qualityScore ? ` | Score: ${log.qualityScore}/100` : ''
           }${log.notes ? ` | Notes: "${log.notes}"` : ''}`
         );

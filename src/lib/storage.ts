@@ -18,7 +18,8 @@ import {
   PhotoMetadata,
   UserSettings,
 } from '@/types';
-import { getFullDefaultBackup, INITIAL_MUSCLE_GROUPS, INITIAL_GYM_PROFILE } from './initialData';
+import { getFullDefaultBackup, INITIAL_MUSCLE_GROUPS, INITIAL_GYM_PROFILE, INITIAL_SETTINGS } from './initialData';
+import { parseSleepDuration } from './utils';
 
 const STORAGE_KEY = 'vibe_tracker_app_data_v2';
 
@@ -95,15 +96,95 @@ export function saveStoredData(data: AppDataBackup): void {
   }
 }
 
+export function normalizeAppData(raw: any): AppDataBackup {
+  if (!raw || typeof raw !== 'object') {
+    return getFullDefaultBackup();
+  }
+
+  const normalizedSleep: Record<string, SleepLog> = {};
+  if (raw.sleepLogs && typeof raw.sleepLogs === 'object') {
+    for (const [dateISO, log] of Object.entries(raw.sleepLogs)) {
+      if (log && typeof log === 'object') {
+        const l = log as SleepLog;
+        const parsedDur = parseSleepDuration(l.durationTime || l.durationMinutesTotal || l.durationHours);
+        normalizedSleep[dateISO] = {
+          ...l,
+          dateISO,
+          durationTime: parsedDur.timeStr,
+          durationHours: parsedDur.floatHours,
+          durationMinutesTotal: parsedDur.totalMinutes,
+          bedtime: l.bedtime || '23:00',
+          wakeTime: l.wakeTime || '07:00',
+          qualityScore: l.qualityScore !== undefined ? l.qualityScore : 85,
+          notes: l.notes || undefined,
+          photoIds: Array.isArray(l.photoIds) ? l.photoIds : [],
+          updatedAt: l.updatedAt || new Date().toISOString(),
+        };
+      }
+    }
+  }
+
+  return {
+    version: raw.version || '2.0.0',
+    exportedAt: raw.exportedAt || new Date().toISOString(),
+    habits: Array.isArray(raw.habits) ? raw.habits : [],
+    objectives: Array.isArray(raw.objectives) ? raw.objectives : [],
+    workoutLogs: raw.workoutLogs && typeof raw.workoutLogs === 'object' ? raw.workoutLogs : {},
+    muscleGroups:
+      Array.isArray(raw.muscleGroups) && raw.muscleGroups.length > 0
+        ? raw.muscleGroups
+        : INITIAL_MUSCLE_GROUPS,
+    gymProfile:
+      raw.gymProfile && typeof raw.gymProfile === 'object'
+        ? {
+            workoutsPerWeekGoal: raw.gymProfile.workoutsPerWeekGoal || 4,
+            preferredSplit: raw.gymProfile.preferredSplit || 'push',
+            preferredWeightUnit: raw.gymProfile.preferredWeightUnit || 'kg',
+            splitSchedule:
+              raw.gymProfile.splitSchedule ||
+              INITIAL_GYM_PROFILE.splitSchedule || {
+                monday: 'push',
+                tuesday: 'pull',
+                wednesday: 'legs',
+                thursday: 'rest',
+                friday: 'push',
+                saturday: 'pull',
+                sunday: 'rest',
+              },
+          }
+        : INITIAL_GYM_PROFILE,
+    trash: Array.isArray(raw.trash) ? raw.trash : [],
+    habitBreakers: Array.isArray(raw.habitBreakers) ? raw.habitBreakers : [],
+    actionLogs: Array.isArray(raw.actionLogs) ? raw.actionLogs : [],
+    tasks: Array.isArray(raw.tasks) ? raw.tasks : [],
+    completedTasks: Array.isArray(raw.completedTasks) ? raw.completedTasks : [],
+    sleepLogs: normalizedSleep,
+    fitnessPhotos:
+      raw.fitnessPhotos && typeof raw.fitnessPhotos === 'object' ? raw.fitnessPhotos : {},
+    settings:
+      raw.settings && typeof raw.settings === 'object'
+        ? {
+            ...INITIAL_SETTINGS,
+            ...raw.settings,
+            customApiKeys: {
+              ...(INITIAL_SETTINGS.customApiKeys || {}),
+              ...(raw.settings.customApiKeys || {}),
+            },
+          }
+        : INITIAL_SETTINGS,
+  };
+}
+
 export function exportDataAsJSON(): void {
   const data = getStoredData();
-  data.exportedAt = new Date().toISOString();
-  const jsonStr = JSON.stringify(data, null, 2);
+  const normalized = normalizeAppData(data);
+  normalized.exportedAt = new Date().toISOString();
+  const jsonStr = JSON.stringify(normalized, null, 2);
   const blob = new Blob([jsonStr], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `vibe-habit-ironforge-backup-${new Date().toISOString().split('T')[0]}.json`;
+  a.download = `VIBE365_BACKUP_${new Date().toISOString().split('T')[0]}.json`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -112,32 +193,13 @@ export function exportDataAsJSON(): void {
 
 export function importDataFromJSON(jsonText: string): AppDataBackup {
   const parsed = JSON.parse(jsonText);
-  if (!parsed.habits || !parsed.workoutLogs || !parsed.muscleGroups) {
-    throw new Error('Invalid backup file format: missing core collections.');
-  }
-  if (!parsed.trash) parsed.trash = [];
-  if (!parsed.habitBreakers) parsed.habitBreakers = [];
-  if (!parsed.actionLogs) parsed.actionLogs = [];
-  if (!parsed.tasks) parsed.tasks = [];
-  if (!parsed.completedTasks) parsed.completedTasks = [];
-  if (!parsed.sleepLogs) parsed.sleepLogs = {};
-  if (!parsed.fitnessPhotos) parsed.fitnessPhotos = {};
-  if (!parsed.settings) {
-    parsed.settings = {
-      userName: 'Athlete',
-      theme: 'cyber-dark',
-      sleepTargetHours: 8.0,
-      targetBedtime: '23:00',
-      targetWakeTime: '07:00',
-      autoArchiveTasksAfterDays: 30,
-      defaultLLMProvider: 'groq',
-      defaultModelId: 'openai/gpt-oss-20b',
-      autoFallbackEnabled: true,
-    };
+  if (!parsed || typeof parsed !== 'object') {
+    throw new Error('Invalid backup file format: file must contain a valid JSON object.');
   }
 
-  saveStoredData(parsed);
-  return parsed;
+  const normalized = normalizeAppData(parsed);
+  saveStoredData(normalized);
+  return normalized;
 }
 
 // -------------------------------------------------------------
@@ -521,11 +583,22 @@ export function clearCompletedTasks(data: AppDataBackup): AppDataBackup {
 // Sleep Logging State Handlers
 // -------------------------------------------------------------
 export function saveSleepLog(data: AppDataBackup, sleepLog: SleepLog): AppDataBackup {
+  const parsedDur = parseSleepDuration(
+    sleepLog.durationTime || sleepLog.durationMinutesTotal || sleepLog.durationHours
+  );
+
+  const normalizedLog: SleepLog = {
+    ...sleepLog,
+    durationTime: parsedDur.timeStr,
+    durationHours: parsedDur.floatHours,
+    durationMinutesTotal: parsedDur.totalMinutes,
+  };
+
   const next: AppDataBackup = {
     ...data,
     sleepLogs: {
       ...(data.sleepLogs || {}),
-      [sleepLog.dateISO]: sleepLog,
+      [sleepLog.dateISO]: normalizedLog,
     },
   };
 
@@ -534,7 +607,7 @@ export function saveSleepLog(data: AppDataBackup, sleepLog: SleepLog): AppDataBa
     'sleep_log',
     sleepLog.dateISO,
     `Sleep on ${sleepLog.dateISO}`,
-    `Logged ${sleepLog.durationHours} hrs sleep (${sleepLog.bedtime} - ${sleepLog.wakeTime})`
+    `Logged ${parsedDur.displayStr} sleep (${sleepLog.bedtime} - ${sleepLog.wakeTime})`
   );
 }
 

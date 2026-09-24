@@ -1,6 +1,6 @@
 import { AppDataBackup } from '@/types';
 import { supabase } from './supabaseClient';
-import { getStoredData, saveStoredData } from './storage';
+import { getStoredData, saveStoredData, normalizeAppData } from './storage';
 
 export type CloudSyncStatus = 'idle' | 'syncing' | 'synced' | 'offline' | 'error';
 
@@ -52,13 +52,10 @@ export async function loadCloudData(): Promise<AppDataBackup | null> {
     }
 
     if (data && data.payload) {
-      const cloudPayload = data.payload as AppDataBackup;
-      // Basic sanity validation
-      if (cloudPayload.habits && cloudPayload.workoutLogs) {
-        saveStoredData(cloudPayload);
-        notifyListeners('synced');
-        return cloudPayload;
-      }
+      const cloudPayload = normalizeAppData(data.payload);
+      saveStoredData(cloudPayload);
+      notifyListeners('synced');
+      return cloudPayload;
     }
 
     // No row in cloud yet; if we have local data, initialize the cloud with local data

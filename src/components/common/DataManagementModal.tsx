@@ -104,12 +104,13 @@ export const DataManagementModal: React.FC<DataManagementModalProps> = ({
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       try {
         const text = event.target?.result as string;
         const imported = importDataFromJSON(text);
         onDataLoaded(imported);
-        setSuccessMessage('Data successfully restored.');
+        await saveCloudDataImmediate(imported);
+        setSuccessMessage('Data successfully restored and synced to cloud.');
         setErrorMessage(null);
       } catch (err: any) {
         setErrorMessage('Invalid backup format: ' + (err.message || ''));
@@ -118,7 +119,7 @@ export const DataManagementModal: React.FC<DataManagementModalProps> = ({
     reader.readAsText(file);
   };
 
-  const handleResetToDemo = () => {
+  const handleResetToDemo = async () => {
     if (
       window.confirm(
         'Load sample template dataset? This will load rich demo habits, objectives, and progressive overload gym logs.'
@@ -127,7 +128,8 @@ export const DataManagementModal: React.FC<DataManagementModalProps> = ({
       const demo = getMockSampleBackup();
       saveStoredData(demo);
       onDataLoaded(demo);
-      setSuccessMessage('Loaded demo sample data.');
+      await saveCloudDataImmediate(demo);
+      setSuccessMessage('Loaded demo sample data and synced to cloud.');
       setErrorMessage(null);
     }
   };

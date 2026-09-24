@@ -19,6 +19,7 @@ import {
 import {
   getStoredData,
   saveStoredData,
+  normalizeAppData,
   moveToTrash,
   restoreFromTrash,
   purgeFromTrash,
@@ -35,7 +36,8 @@ import {
   deleteFitnessPhotoMetadata,
   updateUserSettings,
 } from '@/lib/storage';
-import { getTodayISO, formatDatePretty } from '@/lib/utils';
+import { getTodayISO, formatDatePretty, formatSleepDisplay } from '@/lib/utils';
+import { saveCloudDataImmediate } from '@/lib/cloudSync';
 import { ContributionGrid } from '@/components/habits/ContributionGrid';
 import { HabitList } from '@/components/habits/HabitList';
 import { ObjectiveBoard } from '@/components/objectives/ObjectiveBoard';
@@ -725,8 +727,10 @@ export default function Home() {
   // Export / Import Backup Helpers
   const handleExportBackup = () => {
     if (!data) return;
+    const normalized = normalizeAppData(data);
+    normalized.exportedAt = new Date().toISOString();
     const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(
-      JSON.stringify(data, null, 2)
+      JSON.stringify(normalized, null, 2)
     )}`;
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute('href', jsonString);
@@ -736,9 +740,11 @@ export default function Home() {
     downloadAnchor.remove();
   };
 
-  const handleImportBackup = (importedData: AppDataBackup) => {
-    setData(importedData);
-    saveStoredData(importedData);
+  const handleImportBackup = async (importedData: AppDataBackup) => {
+    const normalized = normalizeAppData(importedData);
+    setData(normalized);
+    saveStoredData(normalized);
+    await saveCloudDataImmediate(normalized);
   };
 
   // Previous day weight comparison
@@ -896,7 +902,11 @@ export default function Home() {
               <span>Sleep</span>
               {data.sleepLogs?.[selectedDate] && (
                 <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-indigo-950/80 text-indigo-300 border border-indigo-800/40">
-                  {data.sleepLogs[selectedDate].durationHours}h
+                  {formatSleepDisplay(
+                    data.sleepLogs[selectedDate].durationHours,
+                    data.sleepLogs[selectedDate].durationMinutesTotal,
+                    data.sleepLogs[selectedDate].durationTime
+                  )}
                 </span>
               )}
             </button>

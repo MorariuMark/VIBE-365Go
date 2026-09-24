@@ -114,6 +114,7 @@ export interface UserGymProfile {
   workoutsPerWeekGoal: number; // e.g. 4
   preferredSplit: SplitType;
   preferredWeightUnit: 'kg' | 'lbs';
+  splitSchedule?: Record<string, string>;
 }
 
 // -------------------------------------------------------------
@@ -232,8 +233,9 @@ export interface TaskItem {
 // -------------------------------------------------------------
 export interface SleepLog {
   dateISO: string; // "YYYY-MM-DD"
-  durationHours: number; // e.g. 7.5
-  durationMinutesTotal: number; // e.g. 450
+  durationHours: number; // e.g. 7.5 or 5.75
+  durationMinutesTotal: number; // e.g. 450 or 345
+  durationTime?: string; // "07:30", "05:45", "06:59" (HH:mm format)
   bedtime: string; // "23:15" (24h format)
   wakeTime: string; // "07:15" (24h format)
   qualityScore?: number; // 1 to 100 or 1 to 5
