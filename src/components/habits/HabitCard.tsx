@@ -14,6 +14,8 @@ import {
   X,
   Target,
   Clock,
+  Edit2,
+  Star,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -34,6 +36,8 @@ interface HabitCardProps {
   onDeleteMetricDefinition: (habitId: string, metricId: string) => void;
   onUpdateTargetCompletions: (habitId: string, target: HabitTargetCompletions) => void;
   onUpdateDailyNotes: (habitId: string, dateISO: string, notes: string) => void;
+  onUpdateDailyRating?: (habitId: string, dateISO: string, rating: number) => void;
+  onEditHabit?: (habitId: string, updatedHabit: Partial<Omit<Habit, 'id' | 'createdAt' | 'streak' | 'bestStreak' | 'history'>>) => void;
   onDeleteHabit: (habitId: string) => void;
 }
 
@@ -49,20 +53,32 @@ export const HabitCard: React.FC<HabitCardProps> = ({
   onDeleteMetricDefinition,
   onUpdateTargetCompletions,
   onUpdateDailyNotes,
+  onUpdateDailyRating,
+  onEditHabit,
   onDeleteHabit,
 }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const [showNotes, setShowNotes] = useState(false);
   const [showGoalModal, setShowGoalModal] = useState(false);
   const [showAddMetricModal, setShowAddMetricModal] = useState(false);
+  const [showEditHabitModal, setShowEditHabitModal] = useState(false);
+
+  // Edit Habit Modal State
+  const [editTitle, setEditTitle] = useState(habit.title);
+  const [editDescription, setEditDescription] = useState(habit.description || '');
+  const [editCategory, setEditCategory] = useState<Habit['category']>(habit.category);
+  const [editColor, setEditColor] = useState(habit.color || '#10b981');
+  const [editDuration, setEditDuration] = useState(habit.duration || '');
 
   // New subtask state
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
   const [showAddSubtask, setShowAddSubtask] = useState(false);
 
-  // Goal edit state
-  const [goalCount, setGoalCount] = useState<number>(habit.targetCompletions?.count || 4);
-  const [goalPeriod, setGoalPeriod] = useState<'week' | 'month'>(
+  // Goal edit state (allow string to permit empty deletion without forcing 1)
+  const [goalCountInput, setGoalCountInput] = useState<string>(
+    habit.targetCompletions ? String(habit.targetCompletions.count) : '4'
+  );
+  const [goalPeriod, setGoalPeriod] = useState<'day' | 'week' | 'month'>(
     habit.targetCompletions?.period || 'week'
   );
 
@@ -74,6 +90,7 @@ export const HabitCard: React.FC<HabitCardProps> = ({
   const isCompletedToday = Boolean(habit.history && habit.history[selectedDate]);
   const currentDailyNote = habit.dailyNotes?.[selectedDate] || '';
   const currentDailyMetrics = habit.dailyMetricValues?.[selectedDate] || {};
+  const currentRating = habit.dailyRatings?.[selectedDate] || 0;
 
   const completedSubtasksCount = habit.subtasks.filter((s) => s.completed).length;
   const totalSubtasks = habit.subtasks.length;
@@ -86,7 +103,9 @@ export const HabitCard: React.FC<HabitCardProps> = ({
     const now = new Date(selectedDate);
     let count = 0;
 
-    if (habit.targetCompletions.period === 'week') {
+    if (habit.targetCompletions.period === 'day') {
+      if (habit.history[selectedDate]) count = 1;
+    } else if (habit.targetCompletions.period === 'week') {
       const day = now.getDay();
       const diffToMonday = day === 0 ? -6 : 1 - day;
       const monday = new Date(now);
@@ -138,11 +157,29 @@ export const HabitCard: React.FC<HabitCardProps> = ({
 
   const handleSaveGoal = (e: React.FormEvent) => {
     e.preventDefault();
+    const parsed = parseInt(goalCountInput, 10);
+    const validCount = !isNaN(parsed) && parsed > 0 ? parsed : 1;
     onUpdateTargetCompletions(habit.id, {
-      count: goalCount,
+      count: validCount,
       period: goalPeriod,
     });
+    setGoalCountInput(String(validCount));
     setShowGoalModal(false);
+  };
+
+  const handleSaveEditHabit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editTitle.trim()) return;
+    if (onEditHabit) {
+      onEditHabit(habit.id, {
+        title: editTitle.trim(),
+        description: editDescription.trim() || undefined,
+        category: editCategory,
+        color: editColor,
+        duration: editDuration.trim() || undefined,
+      });
+    }
+    setShowEditHabitModal(false);
   };
 
   const handleCreateMetric = (e: React.FormEvent) => {
@@ -208,13 +245,28 @@ export const HabitCard: React.FC<HabitCardProps> = ({
 
           {/* Badges & Actions */}
           <div className="flex items-center gap-2 self-start sm:self-center flex-wrap">
+            {/* Duration Badge */}
+            {habit.duration && (
+              <div
+                className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-surface-2 border border-surface-border text-[11px] text-slate-300 font-medium tabular-nums"
+                title={`Target duration: ${habit.duration}`}
+              >
+                <Clock className="w-3.5 h-3.5 text-blue-400" />
+                <span>{habit.duration}</span>
+              </div>
+            )}
+
             {/* Target completions badge */}
             {habit.targetCompletions ? (
               <button
                 type="button"
-                onClick={() => setShowGoalModal(true)}
+                onClick={() => {
+                  setGoalCountInput(String(habit.targetCompletions?.count || 4));
+                  setGoalPeriod(habit.targetCompletions?.period || 'week');
+                  setShowGoalModal(true);
+                }}
                 className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-surface-2 border border-surface-border hover:border-surface-borderHover text-[11px] text-slate-300 font-medium tabular-nums transition"
-                title="Edit weekly/monthly frequency goal"
+                title="Edit daily/weekly/monthly frequency goal"
               >
                 <Target className="w-3.5 h-3.5 text-emerald-400" />
                 <span>
@@ -224,7 +276,11 @@ export const HabitCard: React.FC<HabitCardProps> = ({
             ) : (
               <button
                 type="button"
-                onClick={() => setShowGoalModal(true)}
+                onClick={() => {
+                  setGoalCountInput('4');
+                  setGoalPeriod('week');
+                  setShowGoalModal(true);
+                }}
                 className="text-[11px] text-slate-400 hover:text-white px-2 py-1 rounded-lg border border-surface-border hover:border-surface-borderHover"
               >
                 + Goal
@@ -243,6 +299,23 @@ export const HabitCard: React.FC<HabitCardProps> = ({
               <Flame className={`w-3.5 h-3.5 ${habit.streak > 0 ? 'text-amber-400' : 'text-slate-600'}`} />
               <span>{habit.streak}d</span>
             </div>
+
+            {/* Edit Habit Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setEditTitle(habit.title);
+                setEditDescription(habit.description || '');
+                setEditCategory(habit.category);
+                setEditColor(habit.color || '#10b981');
+                setEditDuration(habit.duration || '');
+                setShowEditHabitModal(true);
+              }}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-surface-2 transition"
+              title="Edit habit details"
+            >
+              <Edit2 className="w-3.5 h-3.5" />
+            </button>
 
             {/* Expand toggle */}
             <button
@@ -437,27 +510,69 @@ export const HabitCard: React.FC<HabitCardProps> = ({
               )}
             </div>
 
-            {/* Daily Note Section */}
-            <div className="space-y-1">
-              <button
-                type="button"
-                onClick={() => setShowNotes(!showNotes)}
-                className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition"
-              >
-                <FileText className="w-3.5 h-3.5 text-amber-400" />
-                <span>Note for {selectedDate} {currentDailyNote ? '• (Logged)' : ''}</span>
-                {showNotes ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-              </button>
+            {/* Daily Note & Session Rating Section */}
+            <div className="space-y-2 pt-1 border-t border-surface-border/50">
+              {/* Session Rating 1 to 5 */}
+              <div className="flex items-center justify-between bg-surface-2/60 border border-surface-border rounded-xl px-3 py-2">
+                <div className="flex items-center gap-1.5">
+                  <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+                  <span className="text-xs font-medium text-slate-300">Session Rating:</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => {
+                        const newRating = currentRating === star ? 0 : star;
+                        if (onUpdateDailyRating) {
+                          onUpdateDailyRating(habit.id, selectedDate, newRating);
+                        }
+                      }}
+                      className={`p-1 rounded-lg transition-transform active-press ${
+                        star <= currentRating
+                          ? 'text-amber-400 hover:scale-110'
+                          : 'text-slate-600 hover:text-slate-400'
+                      }`}
+                      title={`Rate session ${star}/5`}
+                    >
+                      <Star
+                        className={`w-4 h-4 ${
+                          star <= currentRating ? 'fill-amber-400' : 'fill-transparent'
+                        }`}
+                      />
+                    </button>
+                  ))}
+                  {currentRating > 0 && (
+                    <span className="text-[11px] font-semibold text-amber-400 ml-1.5 tabular-nums">
+                      {currentRating}/5
+                    </span>
+                  )}
+                </div>
+              </div>
 
-              {showNotes && (
-                <textarea
-                  rows={2}
-                  value={currentDailyNote}
-                  onChange={(e) => onUpdateDailyNotes(habit.id, selectedDate, e.target.value)}
-                  placeholder="Add notes or thoughts for this habit today..."
-                  className="w-full px-3 py-2 rounded-xl bg-surface-2 border border-surface-border text-xs text-white placeholder:text-slate-400 focus:border-emerald-500"
-                />
-              )}
+              {/* Daily Note */}
+              <div className="space-y-1">
+                <button
+                  type="button"
+                  onClick={() => setShowNotes(!showNotes)}
+                  className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition"
+                >
+                  <FileText className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Note for {selectedDate} {currentDailyNote ? '• (Logged)' : ''}</span>
+                  {showNotes ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                </button>
+
+                {showNotes && (
+                  <textarea
+                    rows={2}
+                    value={currentDailyNote}
+                    onChange={(e) => onUpdateDailyNotes(habit.id, selectedDate, e.target.value)}
+                    placeholder="Add notes or thoughts for this habit today..."
+                    className="w-full px-3 py-2 rounded-xl bg-surface-2 border border-surface-border text-xs text-white placeholder:text-slate-400 focus:border-emerald-500"
+                  />
+                )}
+              </div>
             </div>
 
             {/* Add Subtask Trigger */}
@@ -520,12 +635,24 @@ export const HabitCard: React.FC<HabitCardProps> = ({
             <form onSubmit={handleSaveGoal} className="space-y-3">
               <div>
                 <label className="block text-xs text-slate-400 mb-1.5 font-medium">Frequency</label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGoalPeriod('day');
+                    }}
+                    className={`py-2 rounded-xl text-xs font-semibold border transition ${
+                      goalPeriod === 'day'
+                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/40'
+                        : 'bg-surface-2 text-slate-400 border-surface-border'
+                    }`}
+                  >
+                    Per Day
+                  </button>
                   <button
                     type="button"
                     onClick={() => {
                       setGoalPeriod('week');
-                      onUpdateTargetCompletions(habit.id, { count: goalCount, period: 'week' });
                     }}
                     className={`py-2 rounded-xl text-xs font-semibold border transition ${
                       goalPeriod === 'week'
@@ -539,7 +666,6 @@ export const HabitCard: React.FC<HabitCardProps> = ({
                     type="button"
                     onClick={() => {
                       setGoalPeriod('month');
-                      onUpdateTargetCompletions(habit.id, { count: goalCount, period: 'month' });
                     }}
                     className={`py-2 rounded-xl text-xs font-semibold border transition ${
                       goalPeriod === 'month'
@@ -554,18 +680,14 @@ export const HabitCard: React.FC<HabitCardProps> = ({
 
               <div>
                 <label className="block text-xs text-slate-400 mb-1 font-medium">
-                  Minimum count ({goalPeriod === 'week' ? 'days / week' : 'days / month'})
+                  Minimum count ({goalPeriod === 'day' ? 'times / day' : goalPeriod === 'week' ? 'days / week' : 'days / month'})
                 </label>
                 <input
                   type="number"
                   min="1"
-                  max={goalPeriod === 'week' ? 7 : 31}
-                  value={goalCount}
-                  onChange={(e) => {
-                    const val = parseInt(e.target.value, 10) || 1;
-                    setGoalCount(val);
-                    onUpdateTargetCompletions(habit.id, { count: val, period: goalPeriod });
-                  }}
+                  max={goalPeriod === 'day' ? 24 : goalPeriod === 'week' ? 7 : 31}
+                  value={goalCountInput}
+                  onChange={(e) => setGoalCountInput(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl bg-surface-2 border border-surface-border text-white text-sm tabular-nums focus:border-emerald-500"
                 />
               </div>
@@ -583,6 +705,131 @@ export const HabitCard: React.FC<HabitCardProps> = ({
                   className="px-4 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold transition"
                 >
                   Save Goal
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Habit Modal */}
+      {showEditHabitModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-surface-1 border border-surface-border w-full max-w-lg rounded-2xl p-5 sm:p-6 shadow-2xl relative my-auto">
+            <button
+              type="button"
+              onClick={() => setShowEditHabitModal(false)}
+              className="absolute top-5 right-5 text-slate-400 hover:text-white"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <h3 className="text-base font-semibold text-white mb-4">Edit Habit</h3>
+
+            <form onSubmit={handleSaveEditHabit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1">Habit Title *</label>
+                <input
+                  type="text"
+                  required
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  placeholder="e.g. Morning Mobility, Reading, Deep Work"
+                  className="w-full px-3 py-2 rounded-xl bg-surface-2 border border-surface-border text-white text-sm focus:border-emerald-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1">Description (Optional)</label>
+                <input
+                  type="text"
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  placeholder="Short purpose or context..."
+                  className="w-full px-3 py-2 rounded-xl bg-surface-2 border border-surface-border text-white text-sm focus:border-emerald-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-1">Category</label>
+                  <select
+                    value={editCategory}
+                    onChange={(e) => setEditCategory(e.target.value as any)}
+                    className="w-full px-3 py-2 rounded-xl bg-surface-2 border border-surface-border text-white text-sm focus:border-emerald-500"
+                  >
+                    <option value="fitness">Fitness</option>
+                    <option value="mindset">Mindset</option>
+                    <option value="productivity">Productivity</option>
+                    <option value="health">Health</option>
+                    <option value="learning">Learning</option>
+                    <option value="custom">Custom</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-1">Color Marker</label>
+                  <div className="flex items-center gap-2 pt-1.5">
+                    {['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#f43f5e'].map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => setEditColor(c)}
+                        className={`w-5 h-5 rounded-full transition-transform ${
+                          editColor === c ? 'scale-125 ring-2 ring-white' : 'opacity-70 hover:opacity-100'
+                        }`}
+                        style={{ backgroundColor: c }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Target Duration Field */}
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1">
+                  Target Duration (e.g. 1 hour, 30 mins, 45 min)
+                </label>
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <Clock className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+                    <input
+                      type="text"
+                      value={editDuration}
+                      onChange={(e) => setEditDuration(e.target.value)}
+                      placeholder="e.g. 1 hour, 30 mins, 45 min"
+                      className="w-full pl-9 pr-3 py-2 rounded-xl bg-surface-2 border border-surface-border text-white text-sm focus:border-emerald-500"
+                    />
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {['30 mins', '45 mins', '1 hour'].map((dur) => (
+                      <button
+                        key={dur}
+                        type="button"
+                        onClick={() => setEditDuration(dur)}
+                        className="px-2 py-1 rounded-lg bg-surface-2 border border-surface-border text-[10px] text-slate-300 hover:text-white hover:border-surface-borderHover whitespace-nowrap"
+                      >
+                        {dur}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-surface-border">
+                <button
+                  type="button"
+                  onClick={() => setShowEditHabitModal(false)}
+                  className="px-4 py-2 rounded-xl bg-surface-2 text-slate-300 text-xs font-medium hover:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold transition active-press"
+                >
+                  Save Changes
                 </button>
               </div>
             </form>

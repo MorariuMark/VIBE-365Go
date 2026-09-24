@@ -13,6 +13,7 @@ import {
   PlusCircle,
   Sliders,
   Target,
+  Clock,
 } from 'lucide-react';
 
 interface HabitListProps {
@@ -33,7 +34,9 @@ interface HabitListProps {
   onDeleteMetricDefinition: (habitId: string, metricId: string) => void;
   onUpdateTargetCompletions: (habitId: string, target: HabitTargetCompletions) => void;
   onUpdateDailyNotes: (habitId: string, dateISO: string, notes: string) => void;
+  onUpdateDailyRating?: (habitId: string, dateISO: string, rating: number) => void;
   onCreateHabit: (newHabit: Omit<Habit, 'id' | 'createdAt' | 'streak' | 'bestStreak' | 'history'>) => void;
+  onEditHabit?: (habitId: string, updatedHabit: Partial<Omit<Habit, 'id' | 'createdAt' | 'streak' | 'bestStreak' | 'history'>>) => void;
   onDeleteHabit: (habitId: string) => void;
 }
 
@@ -50,7 +53,9 @@ export const HabitList: React.FC<HabitListProps> = ({
   onDeleteMetricDefinition,
   onUpdateTargetCompletions,
   onUpdateDailyNotes,
+  onUpdateDailyRating,
   onCreateHabit,
+  onEditHabit,
   onDeleteHabit,
 }) => {
   const [activeCategory, setActiveCategory] = useState<string>('all');
@@ -61,11 +66,12 @@ export const HabitList: React.FC<HabitListProps> = ({
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState<Habit['category']>('fitness');
   const [color, setColor] = useState('#10b981');
+  const [duration, setDuration] = useState('');
   const [subtasksInput, setSubtasksInput] = useState<string[]>(['']);
 
-  // Target Completions
-  const [targetCount, setTargetCount] = useState<number>(4);
-  const [targetPeriod, setTargetPeriod] = useState<'week' | 'month'>('week');
+  // Target Completions (store as string to allow deleting freely)
+  const [targetCountInput, setTargetCountInput] = useState<string>('4');
+  const [targetPeriod, setTargetPeriod] = useState<'day' | 'week' | 'month'>('week');
 
   // Sub-Set Metric fields
   const [metricsInput, setMetricsInput] = useState<
@@ -137,14 +143,18 @@ export const HabitList: React.FC<HabitListProps> = ({
         unit: m.unit.trim() || undefined,
       }));
 
+    const parsedCount = parseInt(targetCountInput, 10);
+    const validCount = !isNaN(parsedCount) && parsedCount > 0 ? parsedCount : 1;
+
     onCreateHabit({
       title: title.trim(),
       description: description.trim() || undefined,
       category,
       color,
+      duration: duration.trim() || undefined,
       subtasks: validSubtasks,
       targetCompletions: {
-        count: targetCount,
+        count: validCount,
         period: targetPeriod,
       },
       metrics: validMetrics,
@@ -155,7 +165,10 @@ export const HabitList: React.FC<HabitListProps> = ({
     setDescription('');
     setCategory('fitness');
     setColor('#10b981');
+    setDuration('');
     setSubtasksInput(['']);
+    setTargetCountInput('4');
+    setTargetPeriod('week');
     setMetricsInput([{ label: 'Minutes', type: 'number', unit: 'min' }]);
     setIsModalOpen(false);
   };
@@ -256,6 +269,8 @@ export const HabitList: React.FC<HabitListProps> = ({
               onDeleteMetricDefinition={onDeleteMetricDefinition}
               onUpdateTargetCompletions={onUpdateTargetCompletions}
               onUpdateDailyNotes={onUpdateDailyNotes}
+              onUpdateDailyRating={onUpdateDailyRating}
+              onEditHabit={onEditHabit}
               onDeleteHabit={onDeleteHabit}
             />
           ))
@@ -346,18 +361,51 @@ export const HabitList: React.FC<HabitListProps> = ({
                 </div>
               </div>
 
+              {/* Target Duration Field */}
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1">
+                  Target Duration (e.g. 1 hour, 30 mins, 45 min)
+                </label>
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <Clock className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+                    <input
+                      type="text"
+                      value={duration}
+                      onChange={(e) => setDuration(e.target.value)}
+                      placeholder="e.g. 1 hour, 30 mins, 45 min"
+                      className="w-full pl-9 pr-3 py-2 rounded-xl bg-surface-2 border border-surface-border text-white text-sm focus:border-emerald-500"
+                    />
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {['30 mins', '45 mins', '1 hour'].map((dur) => (
+                      <button
+                        key={dur}
+                        type="button"
+                        onClick={() => setDuration(dur)}
+                        className="px-2 py-1 rounded-lg bg-surface-2 border border-surface-border text-[10px] text-slate-300 hover:text-white hover:border-surface-borderHover whitespace-nowrap"
+                      >
+                        {dur}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
               {/* Target Completions */}
               <div className="p-3 rounded-xl bg-surface-2 border border-surface-border space-y-2">
                 <span className="text-xs font-medium text-slate-300 block">Frequency Target</span>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="block text-[10px] text-slate-400 mb-0.5">Min Times</label>
+                    <label className="block text-[10px] text-slate-400 mb-0.5">
+                      Min Times ({targetPeriod === 'day' ? 'times / day' : targetPeriod === 'week' ? 'days / week' : 'days / month'})
+                    </label>
                     <input
                       type="number"
                       min="1"
-                      max={targetPeriod === 'week' ? 7 : 31}
-                      value={targetCount}
-                      onChange={(e) => setTargetCount(parseInt(e.target.value, 10) || 1)}
+                      max={targetPeriod === 'day' ? 24 : targetPeriod === 'week' ? 7 : 31}
+                      value={targetCountInput}
+                      onChange={(e) => setTargetCountInput(e.target.value)}
                       className="w-full px-2.5 py-1.5 rounded-lg bg-surface-1 border border-surface-border text-xs text-white"
                     />
                   </div>
@@ -368,6 +416,7 @@ export const HabitList: React.FC<HabitListProps> = ({
                       onChange={(e) => setTargetPeriod(e.target.value as any)}
                       className="w-full px-2.5 py-1.5 rounded-lg bg-surface-1 border border-surface-border text-xs text-white"
                     >
+                      <option value="day">Per Day</option>
                       <option value="week">Per Week</option>
                       <option value="month">Per Month</option>
                     </select>

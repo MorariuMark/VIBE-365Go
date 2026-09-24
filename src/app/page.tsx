@@ -348,6 +348,63 @@ export default function Home() {
     });
   };
 
+  const handleEditHabit = (
+    habitId: string,
+    updatedHabit: Partial<Omit<Habit, 'id' | 'createdAt' | 'streak' | 'bestStreak' | 'history'>>
+  ) => {
+    updateData((prev) => {
+      let habitTitle = '';
+      const habits = prev.habits.map((h) => {
+        if (h.id !== habitId) return h;
+        habitTitle = updatedHabit.title || h.title;
+        return {
+          ...h,
+          ...updatedHabit,
+        };
+      });
+      const next = { ...prev, habits };
+      return recordAction(
+        next,
+        'habit_update' as any,
+        habitId,
+        habitTitle,
+        `Updated habit "${habitTitle}" details`
+      );
+    });
+  };
+
+  const handleUpdateDailyRating = (
+    habitId: string,
+    dateISO: string,
+    rating: number
+  ) => {
+    updateData((prev) => {
+      let habitTitle = '';
+      const habits = prev.habits.map((h) => {
+        if (h.id !== habitId) return h;
+        habitTitle = h.title;
+        const ratings = { ...(h.dailyRatings || {}) };
+        if (rating === 0) {
+          delete ratings[dateISO];
+        } else {
+          ratings[dateISO] = rating;
+        }
+        return {
+          ...h,
+          dailyRatings: ratings,
+        };
+      });
+      const next = { ...prev, habits };
+      return recordAction(
+        next,
+        'habit_rating' as any,
+        habitId,
+        habitTitle,
+        `Rated session ${rating}/5 for "${habitTitle}" on ${dateISO}`
+      );
+    });
+  };
+
   const handleCreateHabit = (
     newHabitData: Omit<Habit, 'id' | 'createdAt' | 'streak' | 'bestStreak' | 'history'>
   ) => {
@@ -1157,7 +1214,9 @@ export default function Home() {
               onDeleteMetricDefinition={handleDeleteMetricDefinition}
               onUpdateTargetCompletions={handleUpdateTargetCompletions}
               onUpdateDailyNotes={handleUpdateDailyNotes}
+              onUpdateDailyRating={handleUpdateDailyRating}
               onCreateHabit={handleCreateHabit}
+              onEditHabit={handleEditHabit}
               onDeleteHabit={handleDeleteHabit}
             />
           </div>

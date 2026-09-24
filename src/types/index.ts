@@ -18,7 +18,7 @@ export interface HabitMetric {
 
 export interface HabitTargetCompletions {
   count: number; // e.g. 4
-  period: 'week' | 'month'; // 'week' or 'month'
+  period: 'day' | 'week' | 'month'; // 'day', 'week', or 'month'
 }
 
 export interface Habit {
@@ -32,11 +32,13 @@ export interface Habit {
   bestStreak: number;
   createdAt: string; // ISO date
   history: Record<string, boolean>; // date string "YYYY-MM-DD" -> completed status
-  targetCompletions?: HabitTargetCompletions; // minimum completions per week/month
+  targetCompletions?: HabitTargetCompletions; // minimum completions per day/week/month
   metrics?: HabitMetric[]; // custom sub set variables (e.g. minutes, words, amount)
   dailyMetricValues?: Record<string, Record<string, string | number | boolean>>; // dateISO -> metricId -> val
   dailyNotes?: Record<string, string>; // dateISO -> notes for the day
   generalNotes?: string;
+  duration?: string; // target duration e.g. "30 mins", "1 hour", "45 mins"
+  dailyRatings?: Record<string, number>; // dateISO -> session rating 1 to 5
 }
 
 export interface Objective {
