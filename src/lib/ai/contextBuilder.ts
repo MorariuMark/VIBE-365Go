@@ -279,10 +279,12 @@ export function buildAppContext(data: AppDataBackup, options: ContextOptions): C
           let exSets = 0;
           (ex.sets || []).forEach((s) => {
             if (s.completed) {
-              totalVolumeKg += (s.weightKg || 0) * (s.reps || 0);
+              const weight = Number(s.weightKg) || 0;
+              const reps = Number(s.reps) || 0;
+              totalVolumeKg += weight * reps;
               totalSets++;
               exSets++;
-              if (s.weightKg > exMaxWeight) exMaxWeight = s.weightKg;
+              if (weight > exMaxWeight) exMaxWeight = weight;
             }
           });
           exerciseSummaries.push(

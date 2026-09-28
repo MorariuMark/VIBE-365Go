@@ -411,18 +411,22 @@ export function calculateProgressCurve(
 
     foundEx.sets.forEach((s) => {
       if (!s.completed && s.completed !== undefined) return;
-      const setVol = s.weightKg * s.reps;
+      const w = Number(s.weightKg) || 0;
+      const r = Number(s.reps) || 0;
+      const setVol = w * r;
       totalVol += setVol;
 
-      if (s.weightKg > topWeight) {
-        topWeight = s.weightKg;
-        topReps = s.reps;
+      if (w > topWeight) {
+        topWeight = w;
+        topReps = r;
       }
 
       if (s.isDropSet && s.dropSet) {
-        const dropVol = s.dropSet.weightKg * s.dropSet.reps;
+        const dw = Number(s.dropSet.weightKg) || 0;
+        const dr = Number(s.dropSet.reps) || 0;
+        const dropVol = dw * dr;
         totalVol += dropVol;
-        dropParts.push(`Drop: ${s.dropSet.weightKg}kg×${s.dropSet.reps}`);
+        dropParts.push(`Drop: ${dw}kg×${dr}`);
       }
     });
 

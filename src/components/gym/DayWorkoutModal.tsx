@@ -8,8 +8,11 @@ import {
   LoggedExercise,
   GymSet,
   DropSet,
+  PhotoMetadata,
 } from '@/types';
 import { formatDatePretty } from '@/lib/utils';
+import { compressAndDownscaleImage } from '@/lib/imageCompressor';
+import { savePhotoToVault, getPhotoFromVault, deletePhotoFromVault } from '@/lib/photoStorage';
 import {
   X,
   Dumbbell,
@@ -25,6 +28,12 @@ import {
   Check,
   Bookmark,
   FileText,
+  Edit2,
+  Tag,
+  Camera,
+  Upload,
+  Image as ImageIcon,
+  Loader2,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -40,7 +49,11 @@ interface DayWorkoutModalProps {
     isPermanent: boolean
   ) => MuscleGroup;
   onAddCustomExercise: (muscleGroupId: string, exerciseName: string) => void;
+  onEditCustomExercise?: (muscleGroupId: string, exerciseId: string, newName: string) => void;
   previousWeightKg?: number;
+  fitnessPhotos?: Record<string, PhotoMetadata[]>;
+  onSavePhotoMetadata?: (metadata: PhotoMetadata) => void;
+  onDeletePhotoMetadata?: (photoId: string, dateISO: string) => void;
 }
 
 export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
@@ -51,7 +64,11 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
   onSaveWorkout,
   onAddCustomMuscleGroup,
   onAddCustomExercise,
+  onEditCustomExercise,
   previousWeightKg,
+  fitnessPhotos,
+  onSavePhotoMetadata,
+  onDeletePhotoMetadata,
 }) => {
   // Determine default split & active muscle groups based on default templates
   const initialSplit: SplitType = workout?.splitType || 'push';
@@ -81,6 +98,196 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
   );
   const [completed, setCompleted] = useState<boolean>(workout?.completed || false);
   const [lastAutoSavedAt, setLastAutoSavedAt] = useState<string | null>(null);
+
+  // Photos loading and vault state
+  interface ModalPhotoItem {
+    metadata: PhotoMetadata;
+    dataUrl: string;
+  }
+  const [modalPhotos, setModalPhotos] = useState<ModalPhotoItem[]>([]);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [photoUploadStatus, setPhotoUploadStatus] = useState<string>('');
+  const [activePhotoPreview, setActivePhotoPreview] = useState<ModalPhotoItem | null>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+
+  const dayPhotosMeta = fitnessPhotos?.[dateISO] || [];
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadDayPhotos() {
+      const items: ModalPhotoItem[] = [];
+      for (const meta of dayPhotosMeta) {
+        try {
+          const url = await getPhotoFromVault(meta.id, meta);
+          if (url && !cancelled) {
+            items.push({ metadata: meta, dataUrl: url });
+          }
+        } catch (e) {
+          console.warn('Could not load photo', meta.id, e);
+        }
+      }
+      if (!cancelled) {
+        setModalPhotos(items);
+      }
+    }
+    loadDayPhotos();
+    return () => {
+      cancelled = true;
+    };
+  }, [dayPhotosMeta]);
+
+  const handlePhotoUpload = async (files: FileList | null) => {
+    if (!files || files.length === 0 || !onSavePhotoMetadata) return;
+    setIsUploadingPhoto(true);
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      if (!file.type.startsWith('image/')) continue;
+      try {
+        setPhotoUploadStatus(`Optimizing image (${file.name})...`);
+        const result = await compressAndDownscaleImage(file, {
+          maxDimension: 1600,
+          targetMaxKB: 950,
+          initialQuality: 0.82,
+          category: 'fitness',
+          dateISO,
+        });
+        await savePhotoToVault(result.metadata.id, result.dataUrl, result.metadata);
+        onSavePhotoMetadata(result.metadata);
+      } catch (err) {
+        console.error('Photo processing failed:', err);
+      }
+    }
+    setIsUploadingPhoto(false);
+    setPhotoUploadStatus('');
+  };
+
+  const handleDeletePhoto = async (photoId: string) => {
+    if (!onDeletePhotoMetadata) return;
+    try {
+      await deletePhotoFromVault(photoId);
+      onDeletePhotoMetadata(photoId, dateISO);
+    } catch (err) {
+      console.error('Delete photo failed:', err);
+    }
+  };
+
+  // Sticky exercise editing & library management
+  const [managingStickyGroupId, setManagingStickyGroupId] = useState<string | null>(null);
+  const [editingStickyExId, setEditingStickyExId] = useState<string | null>(null);
+  const [editingStickyExName, setEditingStickyExName] = useState('');
+
+  const [renamingExerciseId, setRenamingExerciseId] = useState<string | null>(null);
+  const [renameExerciseInput, setRenameExerciseInput] = useState('');
+
+  const handleStartRenameExercise = (loggedId: string, currentName: string) => {
+    setRenamingExerciseId(loggedId);
+    setRenameExerciseInput(currentName);
+  };
+
+  const handleSaveRenameExercise = (loggedId: string) => {
+    if (!renameExerciseInput.trim()) return;
+    const trimmed = renameExerciseInput.trim();
+    const target = exercises.find((e) => e.id === loggedId);
+    if (target && onEditCustomExercise) {
+      const grp = muscleGroups.find((g) => g.id === target.muscleGroupId);
+      const customEx = grp?.exercises.find((e) => e.id === target.exerciseId || e.name === target.exerciseName);
+      if (customEx) {
+        onEditCustomExercise(target.muscleGroupId, customEx.id, trimmed);
+      }
+    }
+    const nextExercises = exercises.map((ex) =>
+      ex.id === loggedId ? { ...ex, exerciseName: trimmed } : ex
+    );
+    setExercises(nextExercises);
+    debouncedPersist({ exercises: nextExercises });
+    setRenamingExerciseId(null);
+    setRenameExerciseInput('');
+  };
+
+  const handleSaveStickyRename = (muscleGroupId: string, exerciseId: string) => {
+    if (!editingStickyExName.trim()) return;
+    const trimmed = editingStickyExName.trim();
+    if (onEditCustomExercise) {
+      onEditCustomExercise(muscleGroupId, exerciseId, trimmed);
+    }
+    const nextExercises = exercises.map((ex) =>
+      ex.exerciseId === exerciseId ? { ...ex, exerciseName: trimmed } : ex
+    );
+    setExercises(nextExercises);
+    debouncedPersist({ exercises: nextExercises });
+    setEditingStickyExId(null);
+    setEditingStickyExName('');
+  };
+
+  // Tagging system
+  type TagTarget =
+    | { type: 'exercise'; exerciseId: string; exerciseName: string }
+    | { type: 'set'; exerciseId: string; setId: string; setNumber: number };
+  const [activeTagTarget, setActiveTagTarget] = useState<TagTarget | null>(null);
+  const [customTagInput, setCustomTagInput] = useState('');
+
+  const handleAddTagToTarget = (tagText: string) => {
+    const cleanTag = tagText.trim();
+    if (!cleanTag || !activeTagTarget) return;
+
+    if (activeTagTarget.type === 'exercise') {
+      const nextExercises = exercises.map((ex) => {
+        if (ex.id !== activeTagTarget.exerciseId) return ex;
+        const currentTags = ex.tags || [];
+        if (currentTags.includes(cleanTag)) return ex;
+        return { ...ex, tags: [...currentTags, cleanTag] };
+      });
+      setExercises(nextExercises);
+      debouncedPersist({ exercises: nextExercises });
+    } else {
+      const nextExercises = exercises.map((ex) => {
+        if (ex.id !== activeTagTarget.exerciseId) return ex;
+        return {
+          ...ex,
+          sets: ex.sets.map((s) => {
+            if (s.id !== activeTagTarget.setId) return s;
+            const currentTags = s.tags || [];
+            if (currentTags.includes(cleanTag)) return s;
+            return { ...s, tags: [...currentTags, cleanTag] };
+          }),
+        };
+      });
+      setExercises(nextExercises);
+      debouncedPersist({ exercises: nextExercises });
+    }
+    setCustomTagInput('');
+    setActiveTagTarget(null);
+  };
+
+  const handleRemoveExerciseTag = (exerciseId: string, tagToRemove: string) => {
+    const nextExercises = exercises.map((ex) => {
+      if (ex.id !== exerciseId) return ex;
+      return {
+        ...ex,
+        tags: (ex.tags || []).filter((t) => t !== tagToRemove),
+      };
+    });
+    setExercises(nextExercises);
+    debouncedPersist({ exercises: nextExercises });
+  };
+
+  const handleRemoveSetTag = (exerciseId: string, setId: string, tagToRemove: string) => {
+    const nextExercises = exercises.map((ex) => {
+      if (ex.id !== exerciseId) return ex;
+      return {
+        ...ex,
+        sets: ex.sets.map((s) => {
+          if (s.id !== setId) return s;
+          return {
+            ...s,
+            tags: (s.tags || []).filter((t) => t !== tagToRemove),
+          };
+        }),
+      };
+    });
+    setExercises(nextExercises);
+    debouncedPersist({ exercises: nextExercises });
+  };
 
   // Auto-save refs and state tracking
   const onSaveRef = useRef(onSaveWorkout);
@@ -115,6 +322,28 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
     currentCompleted = stateRef.current.completed
   ) => {
     const numericWeight = currentWeight ? parseFloat(currentWeight) : undefined;
+    const hasSets = currentExercises.some((ex) => ex.sets && ex.sets.length > 0);
+    const effectiveCompleted = hasSets ? true : currentCompleted;
+    if (effectiveCompleted !== stateRef.current.completed) {
+      setCompleted(effectiveCompleted);
+    }
+
+    const sanitizedExercises = currentExercises.map((ex) => ({
+      ...ex,
+      sets: ex.sets.map((s) => ({
+        ...s,
+        weightKg: s.weightKg === '' ? 0 : Number(s.weightKg) || 0,
+        reps: s.reps === '' ? 0 : parseInt(String(s.reps), 10) || 0,
+        dropSet: s.dropSet
+          ? {
+              ...s.dropSet,
+              weightKg: s.dropSet.weightKg === '' ? 0 : Number(s.dropSet.weightKg) || 0,
+              reps: s.dropSet.reps === '' ? 0 : parseInt(String(s.dropSet.reps), 10) || 0,
+            }
+          : undefined,
+      })),
+    }));
+
     const updated: WorkoutDayLog = {
       id: workout?.id || `workout_${dateISO}`,
       dateISO,
@@ -122,9 +351,9 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
       notes: currentNotes.trim() || undefined,
       splitType: currentSplit,
       muscleGroups: currentGroups,
-      exercises: currentExercises,
+      exercises: sanitizedExercises,
       bodyWeightKg: numericWeight,
-      completed: currentCompleted,
+      completed: effectiveCompleted,
     };
     onSaveRef.current(updated);
     setLastAutoSavedAt(
@@ -250,7 +479,8 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
     };
     const nextExercises = [...exercises, newLogged];
     setExercises(nextExercises);
-    persistWorkout(title, splitType, activeMuscleGroupIds, nextExercises, notes, bodyWeightKg, completed);
+    setCompleted(true);
+    persistWorkout(title, splitType, activeMuscleGroupIds, nextExercises, notes, bodyWeightKg, true);
   };
 
   const handleRemoveExerciseFromWorkout = (loggedId: string) => {
@@ -276,7 +506,8 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
       return { ...ex, sets: [...ex.sets, newSet] };
     });
     setExercises(nextExercises);
-    persistWorkout(title, splitType, activeMuscleGroupIds, nextExercises, notes, bodyWeightKg, completed);
+    setCompleted(true);
+    persistWorkout(title, splitType, activeMuscleGroupIds, nextExercises, notes, bodyWeightKg, true);
   };
 
   const handleDuplicateSet = (exerciseId: string, setIndex: number) => {
@@ -295,7 +526,8 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
       return { ...ex, sets: [...ex.sets, duplicated] };
     });
     setExercises(nextExercises);
-    persistWorkout(title, splitType, activeMuscleGroupIds, nextExercises, notes, bodyWeightKg, completed);
+    setCompleted(true);
+    persistWorkout(title, splitType, activeMuscleGroupIds, nextExercises, notes, bodyWeightKg, true);
   };
 
   const handleDeleteSet = (exerciseId: string, setId: string) => {
@@ -317,6 +549,7 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
     setId: string,
     patch: Partial<GymSet>
   ) => {
+    setCompleted(true);
     const nextExercises = exercises.map((ex) => {
       if (ex.id !== exerciseId) return ex;
       return {
@@ -325,7 +558,7 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
       };
     });
     setExercises(nextExercises);
-    persistWorkout(title, splitType, activeMuscleGroupIds, nextExercises, notes, bodyWeightKg, completed);
+    debouncedPersist({ exercises: nextExercises, completed: true });
   };
 
   const handleToggleDropSet = (exerciseId: string, setId: string) => {
@@ -336,8 +569,9 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
         sets: ex.sets.map((s) => {
           if (s.id !== setId) return s;
           const willEnable = !s.isDropSet;
+          const currentWeight = Number(s.weightKg) || 0;
           const dropSetData: DropSet | undefined = willEnable
-            ? { weightKg: Math.round(s.weightKg * 0.7), reps: 5 }
+            ? { weightKg: Math.round(currentWeight * 0.7), reps: 5 }
             : undefined;
           return {
             ...s,
@@ -353,6 +587,25 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
 
   const handleSaveAll = () => {
     const numericWeight = bodyWeightKg ? parseFloat(bodyWeightKg) : undefined;
+    const hasSets = exercises.some((ex) => ex.sets && ex.sets.length > 0);
+    const finalCompleted = hasSets ? true : completed;
+
+    const sanitizedExercises = exercises.map((ex) => ({
+      ...ex,
+      sets: ex.sets.map((s) => ({
+        ...s,
+        weightKg: s.weightKg === '' ? 0 : Number(s.weightKg) || 0,
+        reps: s.reps === '' ? 0 : parseInt(String(s.reps), 10) || 0,
+        dropSet: s.dropSet
+          ? {
+              ...s.dropSet,
+              weightKg: s.dropSet.weightKg === '' ? 0 : Number(s.dropSet.weightKg) || 0,
+              reps: s.dropSet.reps === '' ? 0 : parseInt(String(s.dropSet.reps), 10) || 0,
+            }
+          : undefined,
+      })),
+    }));
+
     const finalWorkout: WorkoutDayLog = {
       id: workout?.id || `workout_${dateISO}`,
       dateISO,
@@ -360,9 +613,9 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
       notes: notes.trim() || undefined,
       splitType,
       muscleGroups: activeMuscleGroupIds,
-      exercises,
+      exercises: sanitizedExercises,
       bodyWeightKg: numericWeight,
-      completed,
+      completed: finalCompleted,
     };
 
     onSaveWorkout(finalWorkout);
@@ -622,6 +875,20 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                         <Plus className="w-3.5 h-3.5" />
                         <span>Sticky Exercise</span>
                       </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setManagingStickyGroupId(
+                            managingStickyGroupId === grpId ? null : grpId
+                          )
+                        }
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#141824] hover:bg-[#1b2234] text-slate-300 border border-[#232a3e] text-xs font-semibold transition"
+                        title={`Edit sticky exercises in ${groupName}`}
+                      >
+                        <Edit2 className="w-3.5 h-3.5 text-slate-400" />
+                        <span>Edit Library</span>
+                      </button>
                     </div>
                   </div>
 
@@ -659,6 +926,93 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                     </div>
                   )}
 
+                  {/* Manage / Edit Sticky Exercises in Library */}
+                  {managingStickyGroupId === grpId && grp && (
+                    <div className="p-3.5 rounded-xl bg-[#121624] border border-blue-500/30 space-y-3">
+                      <div className="flex items-center justify-between border-b border-[#232a3e] pb-2">
+                        <span className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                          <Edit2 className="w-3.5 h-3.5 text-blue-400" />
+                          Edit Sticky Exercises ({groupName})
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setManagingStickyGroupId(null);
+                            setEditingStickyExId(null);
+                          }}
+                          className="text-slate-400 hover:text-white text-xs font-mono"
+                        >
+                          Close
+                        </button>
+                      </div>
+
+                      {grp.exercises && grp.exercises.length > 0 ? (
+                        <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                          {grp.exercises.map((ex) => (
+                            <div
+                              key={ex.id}
+                              className="flex items-center justify-between p-2 rounded-lg bg-[#090b10] border border-[#1b2131]"
+                            >
+                              {editingStickyExId === ex.id ? (
+                                <div className="flex items-center gap-2 w-full">
+                                  <input
+                                    type="text"
+                                    value={editingStickyExName}
+                                    onChange={(e) => setEditingStickyExName(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        handleSaveStickyRename(grpId, ex.id);
+                                      }
+                                    }}
+                                    className="flex-1 px-2.5 py-1 rounded bg-[#141824] border border-blue-500 text-xs font-semibold text-white focus:outline-none"
+                                    autoFocus
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSaveStickyRename(grpId, ex.id)}
+                                    className="px-2.5 py-1 rounded bg-emerald-500 text-slate-950 text-xs font-bold hover:bg-emerald-400"
+                                  >
+                                    Save
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingStickyExId(null)}
+                                    className="p-1 text-slate-400 hover:text-white"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <>
+                                  <div className="flex items-center gap-2">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                                    <span className="text-xs font-medium text-slate-200">{ex.name}</span>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingStickyExId(ex.id);
+                                      setEditingStickyExName(ex.name);
+                                    }}
+                                    className="flex items-center gap-1 px-2 py-1 rounded bg-[#141824] hover:bg-[#1b2234] text-slate-300 hover:text-blue-400 border border-[#232a3e] text-xs transition"
+                                  >
+                                    <Edit2 className="w-3 h-3" />
+                                    <span>Rename</span>
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-xs font-mono text-slate-500 py-2">
+                          No sticky exercises registered for this group yet. Add one via &quot;Sticky Exercise&quot;.
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {/* Logged exercises list */}
                   <div className="space-y-4">
                     {groupLoggedExercises.map((loggedEx) => (
@@ -667,10 +1021,88 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                         className="bg-[#090b10] border border-[#1b2131] rounded-xl p-3.5 sm:p-4 space-y-3"
                       >
                         {/* Exercise Title Bar */}
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-bold text-white">
-                            {loggedEx.exerciseName}
-                          </span>
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {renamingExerciseId === loggedEx.id ? (
+                              <div className="flex items-center gap-1.5">
+                                <input
+                                  type="text"
+                                  value={renameExerciseInput}
+                                  onChange={(e) => setRenameExerciseInput(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      handleSaveRenameExercise(loggedEx.id);
+                                    }
+                                  }}
+                                  className="px-2.5 py-1 rounded bg-[#141824] border border-blue-500 text-xs font-bold text-white focus:outline-none"
+                                  autoFocus
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleSaveRenameExercise(loggedEx.id)}
+                                  className="px-2.5 py-1 rounded bg-emerald-500 text-slate-950 text-xs font-bold hover:bg-emerald-400 transition"
+                                >
+                                  Save
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setRenamingExerciseId(null)}
+                                  className="p-1 text-slate-400 hover:text-white"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ) : (
+                              <>
+                                <span className="text-sm font-bold text-white">
+                                  {loggedEx.exerciseName}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleStartRenameExercise(loggedEx.id, loggedEx.exerciseName)}
+                                  className="p-1 rounded text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 transition"
+                                  title="Edit exercise name"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                              </>
+                            )}
+
+                            {/* Exercise Tags */}
+                            {(loggedEx.tags || []).map((t) => (
+                              <span
+                                key={t}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-purple-500/15 text-purple-300 border border-purple-500/30"
+                              >
+                                {t}
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveExerciseTag(loggedEx.id, t)}
+                                  className="hover:text-rose-400"
+                                  title="Remove tag"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </span>
+                            ))}
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setActiveTagTarget({
+                                  type: 'exercise',
+                                  exerciseId: loggedEx.id,
+                                  exerciseName: loggedEx.exerciseName,
+                                })
+                              }
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-[#141824] hover:bg-[#1b2234] text-slate-400 hover:text-slate-200 border border-[#232a3e] transition"
+                              title="Add tag to exercise"
+                            >
+                              <Plus className="w-3 h-3" />
+                              <span>Tag</span>
+                            </button>
+                          </div>
 
                           <button
                             type="button"
@@ -712,10 +1144,10 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                                     type="number"
                                     step="any"
                                     min="0"
-                                    value={set.weightKg}
+                                    value={set.weightKg ?? ''}
                                     onChange={(e) =>
                                       handleUpdateSet(loggedEx.id, set.id, {
-                                        weightKg: parseFloat(e.target.value) || 0,
+                                        weightKg: e.target.value === '' ? '' : e.target.value,
                                       })
                                     }
                                     className="w-full px-2 py-1 rounded bg-[#090b10] border border-[#232a3e] text-xs font-mono font-bold text-white focus:outline-none focus:border-blue-500"
@@ -726,10 +1158,10 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                                   <input
                                     type="number"
                                     min="0"
-                                    value={set.reps}
+                                    value={set.reps ?? ''}
                                     onChange={(e) =>
                                       handleUpdateSet(loggedEx.id, set.id, {
-                                        reps: parseInt(e.target.value, 10) || 0,
+                                        reps: e.target.value === '' ? '' : e.target.value,
                                       })
                                     }
                                     className="w-full px-2 py-1 rounded bg-[#090b10] border border-[#232a3e] text-xs font-mono font-bold text-white focus:outline-none focus:border-blue-500"
@@ -745,12 +1177,12 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                                         step="any"
                                         min="0"
                                         placeholder="kg"
-                                        value={set.dropSet.weightKg}
+                                        value={set.dropSet.weightKg ?? ''}
                                         onChange={(e) =>
                                           handleUpdateSet(loggedEx.id, set.id, {
                                             dropSet: {
                                               ...set.dropSet!,
-                                              weightKg: parseFloat(e.target.value) || 0,
+                                              weightKg: e.target.value === '' ? '' : e.target.value,
                                             },
                                           })
                                         }
@@ -761,12 +1193,12 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                                         type="number"
                                         min="0"
                                         placeholder="reps"
-                                        value={set.dropSet.reps}
+                                        value={set.dropSet.reps ?? ''}
                                         onChange={(e) =>
                                           handleUpdateSet(loggedEx.id, set.id, {
                                             dropSet: {
                                               ...set.dropSet!,
-                                              reps: parseInt(e.target.value, 10) || 0,
+                                              reps: e.target.value === '' ? '' : e.target.value,
                                             },
                                           })
                                         }
@@ -876,10 +1308,10 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                                       type="number"
                                       step="any"
                                       min="0"
-                                      value={set.weightKg}
+                                      value={set.weightKg ?? ''}
                                       onChange={(e) =>
                                         handleUpdateSet(loggedEx.id, set.id, {
-                                          weightKg: parseFloat(e.target.value) || 0,
+                                          weightKg: e.target.value === '' ? '' : e.target.value,
                                         })
                                       }
                                       className="w-full px-2.5 py-1.5 rounded bg-[#090b10] border border-[#232a3e] text-xs font-mono font-bold text-white"
@@ -892,10 +1324,10 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                                     <input
                                       type="number"
                                       min="0"
-                                      value={set.reps}
+                                      value={set.reps ?? ''}
                                       onChange={(e) =>
                                         handleUpdateSet(loggedEx.id, set.id, {
-                                          reps: parseInt(e.target.value, 10) || 0,
+                                          reps: e.target.value === '' ? '' : e.target.value,
                                         })
                                       }
                                       className="w-full px-2.5 py-1.5 rounded bg-[#090b10] border border-[#232a3e] text-xs font-mono font-bold text-white"
@@ -913,12 +1345,12 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                                           type="number"
                                           step="any"
                                           placeholder="kg"
-                                          value={set.dropSet.weightKg}
+                                          value={set.dropSet.weightKg ?? ''}
                                           onChange={(e) =>
                                             handleUpdateSet(loggedEx.id, set.id, {
                                               dropSet: {
                                                 ...set.dropSet!,
-                                                weightKg: parseFloat(e.target.value) || 0,
+                                                weightKg: e.target.value === '' ? '' : e.target.value,
                                               },
                                             })
                                           }
@@ -928,12 +1360,12 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                                         <input
                                           type="number"
                                           placeholder="reps"
-                                          value={set.dropSet.reps}
+                                          value={set.dropSet.reps ?? ''}
                                           onChange={(e) =>
                                             handleUpdateSet(loggedEx.id, set.id, {
                                               dropSet: {
                                                 ...set.dropSet!,
-                                                reps: parseInt(e.target.value, 10) || 0,
+                                                reps: e.target.value === '' ? '' : e.target.value,
                                               },
                                             })
                                           }
@@ -959,6 +1391,43 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                                     </button>
                                   )}
                                 </div>
+                              </div>
+
+                              {/* Set Tags Bar (Visible for both Desktop & Mobile) */}
+                              <div className="flex flex-wrap items-center gap-1.5 mt-2 pt-2 border-t border-[#1b2131]/60">
+                                <span className="text-[10px] font-mono text-slate-500">Tags:</span>
+                                {(set.tags || []).map((t) => (
+                                  <span
+                                    key={t}
+                                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-500/10 text-blue-300 border border-blue-500/30"
+                                  >
+                                    {t}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveSetTag(loggedEx.id, set.id, t)}
+                                      className="hover:text-rose-400"
+                                      title="Remove tag"
+                                    >
+                                      <X className="w-2.5 h-2.5" />
+                                    </button>
+                                  </span>
+                                ))}
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setActiveTagTarget({
+                                      type: 'set',
+                                      exerciseId: loggedEx.id,
+                                      setId: set.id,
+                                      setNumber: set.setNumber,
+                                    })
+                                  }
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-[#141824] hover:bg-[#1b2234] text-slate-400 hover:text-slate-200 border border-[#232a3e] transition"
+                                  title="Add tag to set"
+                                >
+                                  <Plus className="w-2.5 h-2.5" />
+                                  <span>Tag</span>
+                                </button>
                               </div>
                             </div>
                           ))}
@@ -1086,6 +1555,102 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
               )}
             </div>
           </div>
+
+          {/* Daily Workout & Progress Photos Section */}
+          <div className="bg-[#0e1119] border border-[#1b2131] rounded-xl p-4 sm:p-5 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#1b2131]">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
+                  <Camera className="w-4 h-4" />
+                </div>
+                <div>
+                  <h5 className="text-sm font-bold text-white tracking-wide uppercase">
+                    Workout & Physique Photos
+                  </h5>
+                  <p className="text-[11px] font-mono text-slate-400">
+                    Client-compressed &lt; 1MB • Saved securely in vault
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <input
+                  type="file"
+                  ref={photoInputRef}
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    handlePhotoUpload(e.target.files);
+                    e.target.value = '';
+                  }}
+                />
+                <button
+                  type="button"
+                  disabled={isUploadingPhoto}
+                  onClick={() => photoInputRef.current?.click()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-semibold transition cursor-pointer disabled:opacity-50"
+                >
+                  {isUploadingPhoto ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Processing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>Add Photos</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {photoUploadStatus && (
+              <div className="text-xs font-mono text-emerald-400 flex items-center gap-2 bg-emerald-950/20 border border-emerald-800/40 p-2.5 rounded-lg">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>{photoUploadStatus}</span>
+              </div>
+            )}
+
+            {modalPhotos.length === 0 ? (
+              <div className="text-center py-6 border border-dashed border-[#1b2131] rounded-xl text-slate-500 text-xs font-mono">
+                No photos logged for this workout yet. Tap &quot;Add Photos&quot; to save physique check-ins or machine setups.
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                {modalPhotos.map((item) => (
+                  <div
+                    key={item.metadata.id}
+                    className="group relative aspect-square rounded-lg overflow-hidden border border-[#232a3e] bg-[#090b10]"
+                  >
+                    <img
+                      src={item.dataUrl}
+                      alt={item.metadata.caption || 'Workout photo'}
+                      className="w-full h-full object-cover cursor-pointer transition duration-300 group-hover:scale-105"
+                      onClick={() => setActivePhotoPreview(item)}
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition flex items-end justify-between p-2">
+                      <span className="text-[10px] font-mono text-slate-300 truncate max-w-[70%]">
+                        {item.metadata.caption || `${item.metadata.compressedSizeKB} KB`}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeletePhoto(item.metadata.id);
+                        }}
+                        className="p-1 rounded bg-rose-950/80 text-rose-400 hover:bg-rose-900 border border-rose-800/50 transition"
+                        title="Delete photo"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Bottom Actions Bar */}
@@ -1183,6 +1748,116 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* Tag Picker Modal */}
+        {activeTagTarget && (
+          <div className="fixed inset-0 z-70 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+            <div className="bg-[#0e1119] border border-[#1b2131] rounded-xl p-5 w-full max-w-sm shadow-2xl relative">
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTagTarget(null);
+                  setCustomTagInput('');
+                }}
+                className="absolute top-4 right-4 text-slate-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              <div className="flex items-center gap-2 mb-3">
+                <Tag className="w-4 h-4 text-blue-400" />
+                <h4 className="text-sm font-bold text-white">
+                  {activeTagTarget.type === 'exercise'
+                    ? `Tag: ${activeTagTarget.exerciseName}`
+                    : `Tag: Set #${activeTagTarget.setNumber}`}
+                </h4>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="text-[10px] font-mono uppercase text-slate-400 mb-1.5 block">
+                    Quick Presets
+                  </label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      'Warm-up',
+                      'Working Set',
+                      'Top Set',
+                      'PR',
+                      'Failure',
+                      'Drop Set',
+                      'Tempo',
+                      'Pause Rep',
+                      'Strict Form',
+                      'Back-off',
+                    ].map((preset) => (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => handleAddTagToTarget(preset)}
+                        className="px-2.5 py-1 rounded-md bg-[#141824] hover:bg-blue-600 hover:text-white border border-[#232a3e] text-xs font-medium text-slate-300 transition"
+                      >
+                        {preset}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-mono uppercase text-slate-400 mb-1.5 block">
+                    Custom Tag
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={customTagInput}
+                      onChange={(e) => setCustomTagInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleAddTagToTarget(customTagInput);
+                        }
+                      }}
+                      placeholder="e.g. Smith Machine, Slow Eccentric..."
+                      className="flex-1 px-3 py-1.5 rounded-lg bg-[#090b10] border border-[#232a3e] text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleAddTagToTarget(customTagInput)}
+                      className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition"
+                    >
+                      Add
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Fullscreen Photo Lightbox Preview */}
+        {activePhotoPreview && (
+          <div className="fixed inset-0 z-70 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
+            <div className="relative max-w-3xl max-h-[90vh] flex flex-col items-center">
+              <button
+                type="button"
+                onClick={() => setActivePhotoPreview(null)}
+                className="absolute -top-10 right-0 text-slate-300 hover:text-white"
+              >
+                <X className="w-6 h-6" />
+              </button>
+              <img
+                src={activePhotoPreview.dataUrl}
+                alt="Preview"
+                className="max-h-[80vh] w-auto rounded-lg object-contain border border-[#232a3e]"
+              />
+              <div className="mt-2 text-xs font-mono text-slate-400">
+                {activePhotoPreview.metadata.compressedSizeKB} KB •{' '}
+                {new Date(activePhotoPreview.metadata.uploadedAt).toLocaleTimeString()}
+              </div>
             </div>
           </div>
         )}

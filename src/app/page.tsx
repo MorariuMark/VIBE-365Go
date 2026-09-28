@@ -547,11 +547,40 @@ export default function Home() {
   // Fitness Handlers with Audit Logging
   const handleSaveWorkout = (workout: WorkoutDayLog) => {
     updateData((prev) => {
+      const hasSets = workout.exercises?.some((ex) => ex.sets && ex.sets.length > 0);
+      const isCompleted = hasSets ? true : Boolean(workout.completed);
+      const normalizedWorkout: WorkoutDayLog = {
+        ...workout,
+        completed: isCompleted,
+      };
+
+      // Also sync any fitness habits if sets were logged and not previously marked
+      let updatedHabits = prev.habits;
+      if (hasSets) {
+        updatedHabits = prev.habits.map((h) => {
+          if (
+            h.category === 'fitness' ||
+            h.title.toLowerCase().includes('workout') ||
+            h.title.toLowerCase().includes('gym')
+          ) {
+            const currentHist = { ...(h.history || {}) };
+            if (!currentHist[workout.dateISO]) {
+              currentHist[workout.dateISO] = true;
+              const streak = h.streak + 1;
+              const bestStreak = Math.max(h.bestStreak, streak);
+              return { ...h, history: currentHist, streak, bestStreak };
+            }
+          }
+          return h;
+        });
+      }
+
       const next = {
         ...prev,
+        habits: updatedHabits,
         workoutLogs: {
           ...prev.workoutLogs,
-          [workout.dateISO]: workout,
+          [workout.dateISO]: normalizedWorkout,
         },
       };
       return recordAction(
@@ -561,7 +590,7 @@ export default function Home() {
         workout.title,
         `Saved session "${workout.title}" with ${workout.exercises?.length || 0} exercises${
           workout.bodyWeightKg ? ` and body weight ${workout.bodyWeightKg}kg` : ''
-        }`
+        }${isCompleted ? ' (Completed)' : ''}`
       );
     });
   };
@@ -627,6 +656,25 @@ export default function Home() {
         return {
           ...g,
           exercises: [...g.exercises, newEx],
+        };
+      });
+      return { ...prev, muscleGroups };
+    });
+  };
+
+  const handleEditCustomExercise = (
+    muscleGroupId: string,
+    exerciseId: string,
+    newName: string
+  ) => {
+    updateData((prev) => {
+      const muscleGroups = prev.muscleGroups.map((g) => {
+        if (g.id !== muscleGroupId) return g;
+        return {
+          ...g,
+          exercises: g.exercises.map((ex) =>
+            ex.id === exerciseId ? { ...ex, name: newName } : ex
+          ),
         };
       });
       return { ...prev, muscleGroups };
@@ -813,13 +861,64 @@ export default function Home() {
     return data.workoutLogs[dates[dates.length - 1]].bodyWeightKg;
   };
 
+  // Workout streak calculation
+  const getWorkoutStreakStats = (logs: Record<string, WorkoutDayLog> | undefined) => {
+    if (!logs) return { current: 0, best: 0 };
+    const completedDates = Object.values(logs)
+      .filter((w) => w.completed || w.exercises?.some((e) => e.sets && e.sets.length > 0))
+      .map((w) => w.dateISO);
+
+    if (completedDates.length === 0) return { current: 0, best: 0 };
+
+    const dateSet = new Set(completedDates);
+    let current = 0;
+    const today = new Date();
+    const d = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const todayISO = d.toISOString().split('T')[0];
+    if (!dateSet.has(todayISO)) {
+      d.setDate(d.getDate() - 1);
+    }
+    while (true) {
+      const iso = d.toISOString().split('T')[0];
+      if (dateSet.has(iso)) {
+        current++;
+        d.setDate(d.getDate() - 1);
+      } else {
+        break;
+      }
+    }
+
+    let best = 0;
+    let temp = 0;
+    let lastDate: Date | null = null;
+    const sortedUnique = Array.from(dateSet).sort();
+    for (const iso of sortedUnique) {
+      const curDate = new Date(iso + 'T00:00:00');
+      if (lastDate) {
+        const diffDays = Math.round((curDate.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
+        if (diffDays === 1) {
+          temp++;
+        } else {
+          temp = 1;
+        }
+      } else {
+        temp = 1;
+      }
+      if (temp > best) best = temp;
+      lastDate = curDate;
+    }
+
+    return { current, best };
+  };
+
   // HUD computed metrics
   const todayHabitsTotal = data.habits.length;
   const todayHabitsDone = data.habits.filter((h) => h.history?.[selectedDate]).length;
   const todayHabitsPct =
     todayHabitsTotal > 0 ? Math.round((todayHabitsDone / todayHabitsTotal) * 100) : 0;
-  const bestOverallStreak = Math.max(0, ...data.habits.map((h) => h.bestStreak));
-  const currentActiveStreak = Math.max(0, ...data.habits.map((h) => h.streak));
+  const workoutStreakStats = getWorkoutStreakStats(data.workoutLogs);
+  const bestOverallStreak = Math.max(0, ...data.habits.map((h) => h.bestStreak), workoutStreakStats.best);
+  const currentActiveStreak = Math.max(0, ...data.habits.map((h) => h.streak), workoutStreakStats.current);
   const todayWorkout = data.workoutLogs[selectedDate];
   const trashCount = (data.trash || []).length;
   const auditCount = (data.actionLogs || []).length;
@@ -1439,6 +1538,10 @@ export default function Home() {
           onSaveWorkout={handleSaveWorkout}
           onAddCustomMuscleGroup={handleAddCustomMuscleGroup}
           onAddCustomExercise={handleAddCustomExercise}
+          onEditCustomExercise={handleEditCustomExercise}
+          fitnessPhotos={data.fitnessPhotos || {}}
+          onSavePhotoMetadata={handleSaveFitnessPhoto}
+          onDeletePhotoMetadata={handleDeleteFitnessPhoto}
         />
       )}
 

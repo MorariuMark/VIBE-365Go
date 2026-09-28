@@ -74,19 +74,20 @@ export interface MuscleGroup {
 }
 
 export interface DropSet {
-  weightKg: number;
-  reps: number;
+  weightKg: number | string;
+  reps: number | string;
 }
 
 export interface GymSet {
   id: string;
   setNumber: number;
-  weightKg: number;
-  reps: number;
+  weightKg: number | string;
+  reps: number | string;
   isDropSet?: boolean;
   dropSet?: DropSet;
   completed: boolean;
   rpe?: number;
+  tags?: string[];
 }
 
 export interface LoggedExercise {
@@ -97,6 +98,7 @@ export interface LoggedExercise {
   muscleGroupName: string;
   sets: GymSet[];
   notes?: string;
+  tags?: string[];
 }
 
 export interface WorkoutDayLog {
@@ -110,6 +112,7 @@ export interface WorkoutDayLog {
   bodyWeightKg?: number;
   completed: boolean;
   durationMinutes?: number;
+  photoIds?: string[];
 }
 
 export interface UserGymProfile {
