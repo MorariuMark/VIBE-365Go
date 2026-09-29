@@ -34,8 +34,14 @@ import {
   Upload,
   Image as ImageIcon,
   Loader2,
+  Download,
+  Maximize2,
+  Minimize2,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { saveImageToCameraRoll } from '@/lib/saveToCameraRoll';
 
 interface DayWorkoutModalProps {
   dateISO: string;
@@ -108,6 +114,9 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [photoUploadStatus, setPhotoUploadStatus] = useState<string>('');
   const [activePhotoPreview, setActivePhotoPreview] = useState<ModalPhotoItem | null>(null);
+  const [isActualSize, setIsActualSize] = useState<boolean>(false);
+  const [isSavingToCameraRoll, setIsSavingToCameraRoll] = useState<boolean>(false);
+  const [saveToast, setSaveToast] = useState<string | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
   const dayPhotosMeta = fitnessPhotos?.[dateISO] || [];
@@ -138,12 +147,16 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
 
   const handlePhotoUpload = async (files: FileList | null) => {
     if (!files || files.length === 0 || !onSavePhotoMetadata) return;
+    const imageFiles = Array.from(files).filter((f) => f.type.startsWith('image/'));
+    if (imageFiles.length === 0) return;
+
     setIsUploadingPhoto(true);
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      if (!file.type.startsWith('image/')) continue;
+    for (let i = 0; i < imageFiles.length; i++) {
+      const file = imageFiles[i];
       try {
-        setPhotoUploadStatus(`Optimizing image (${file.name})...`);
+        setPhotoUploadStatus(
+          `Processing photo ${i + 1} of ${imageFiles.length} (${file.name})...`
+        );
         const result = await compressAndDownscaleImage(file, {
           maxDimension: 1600,
           targetMaxKB: 950,
@@ -153,12 +166,48 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
         });
         await savePhotoToVault(result.metadata.id, result.dataUrl, result.metadata);
         onSavePhotoMetadata(result.metadata);
+        // Instant visual feedback: add photo immediately
+        setModalPhotos((prev) => [
+          { metadata: result.metadata, dataUrl: result.dataUrl },
+          ...prev.filter((p) => p.metadata.id !== result.metadata.id),
+        ]);
       } catch (err) {
         console.error('Photo processing failed:', err);
       }
     }
     setIsUploadingPhoto(false);
-    setPhotoUploadStatus('');
+    setPhotoUploadStatus(
+      imageFiles.length > 1 ? `Successfully uploaded ${imageFiles.length} photos!` : ''
+    );
+    if (imageFiles.length > 1) {
+      setTimeout(() => setPhotoUploadStatus(''), 3000);
+    }
+  };
+
+  const handleSaveActivePhotoToCameraRoll = async (item: ModalPhotoItem) => {
+    setIsSavingToCameraRoll(true);
+    const dateStr = item.metadata.dateISO || dateISO;
+    const filename = `VIBE365-${dateStr}-${item.metadata.id}.jpg`;
+    const res = await saveImageToCameraRoll(item.dataUrl, filename);
+    setIsSavingToCameraRoll(false);
+    setSaveToast(res.message || 'Saved to Camera Roll!');
+    setTimeout(() => setSaveToast(null), 3000);
+  };
+
+  const handleNextPhoto = () => {
+    if (!activePhotoPreview || modalPhotos.length <= 1) return;
+    const currentIndex = modalPhotos.findIndex((p) => p.metadata.id === activePhotoPreview.metadata.id);
+    const nextIndex = (currentIndex + 1) % modalPhotos.length;
+    setActivePhotoPreview(modalPhotos[nextIndex]);
+    setIsActualSize(false);
+  };
+
+  const handlePrevPhoto = () => {
+    if (!activePhotoPreview || modalPhotos.length <= 1) return;
+    const currentIndex = modalPhotos.findIndex((p) => p.metadata.id === activePhotoPreview.metadata.id);
+    const prevIndex = (currentIndex - 1 + modalPhotos.length) % modalPhotos.length;
+    setActivePhotoPreview(modalPhotos[prevIndex]);
+    setIsActualSize(false);
   };
 
   const handleDeletePhoto = async (photoId: string) => {
@@ -1840,24 +1889,162 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
 
         {/* Fullscreen Photo Lightbox Preview */}
         {activePhotoPreview && (
-          <div className="fixed inset-0 z-70 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
-            <div className="relative max-w-3xl max-h-[90vh] flex flex-col items-center">
-              <button
-                type="button"
-                onClick={() => setActivePhotoPreview(null)}
-                className="absolute -top-10 right-0 text-slate-300 hover:text-white"
-              >
-                <X className="w-6 h-6" />
-              </button>
+          <div
+            className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-md flex flex-col justify-between select-none animate-in fade-in duration-200"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                setActivePhotoPreview(null);
+                setIsActualSize(false);
+              }
+              if (e.key === 'ArrowRight') handleNextPhoto();
+              if (e.key === 'ArrowLeft') handlePrevPhoto();
+            }}
+          >
+            {/* Top Bar */}
+            <div className="p-3 sm:p-4 bg-gradient-to-b from-black/90 to-transparent flex items-center justify-between gap-3 z-10">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 flex-shrink-0">
+                  <Camera className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <h4 className="text-xs sm:text-sm font-bold text-white truncate">
+                    {activePhotoPreview.metadata.caption || 'Progress Photo'}
+                  </h4>
+                  <div className="flex items-center gap-2 text-[10px] sm:text-[11px] font-mono text-slate-400">
+                    <span>{formatDatePretty(activePhotoPreview.metadata.dateISO)}</span>
+                    <span>•</span>
+                    <span>{activePhotoPreview.metadata.compressedSizeKB} KB</span>
+                    <span>•</span>
+                    <span>{activePhotoPreview.metadata.width} × {activePhotoPreview.metadata.height} px</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {/* Save to Camera Roll Button */}
+                <button
+                  type="button"
+                  onClick={() => handleSaveActivePhotoToCameraRoll(activePhotoPreview)}
+                  disabled={isSavingToCameraRoll}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition shadow-lg active-press disabled:opacity-50 cursor-pointer"
+                  title="Save photo to Camera Roll / Photos"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>{isSavingToCameraRoll ? 'Saving...' : 'Save to Camera Roll'}</span>
+                </button>
+
+                {/* 100% Full Size / Fit Toggle */}
+                <button
+                  type="button"
+                  onClick={() => setIsActualSize(!isActualSize)}
+                  className="p-2 rounded-lg bg-[#141824] hover:bg-[#1b2234] text-slate-300 border border-[#232a3e] text-xs transition"
+                  title={isActualSize ? 'Fit screen' : 'View 100% full size'}
+                >
+                  {isActualSize ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                </button>
+
+                {/* Delete button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleDeletePhoto(activePhotoPreview.metadata.id);
+                    setActivePhotoPreview(null);
+                  }}
+                  className="p-2 rounded-lg text-rose-400 hover:text-rose-300 hover:bg-rose-950/60 border border-transparent hover:border-rose-800/40 transition"
+                  title="Delete photo"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+
+                {/* Close X */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActivePhotoPreview(null);
+                    setIsActualSize(false);
+                  }}
+                  className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition"
+                  title="Close full screen"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Main Canvas Viewport (True Full Screen) */}
+            <div
+              className={`flex-1 w-full h-full flex items-center justify-center p-2 sm:p-4 relative ${
+                isActualSize ? 'overflow-auto' : 'overflow-hidden'
+              }`}
+              onClick={(e) => {
+                if (e.target === e.currentTarget) {
+                  setActivePhotoPreview(null);
+                  setIsActualSize(false);
+                }
+              }}
+            >
+              {/* Previous Photo Button */}
+              {modalPhotos.length > 1 && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handlePrevPhoto();
+                  }}
+                  className="absolute left-2 sm:left-4 z-20 p-2 sm:p-3 rounded-full bg-black/60 hover:bg-black/80 text-white border border-white/10 backdrop-blur-sm transition"
+                  title="Previous photo (Arrow Left)"
+                >
+                  <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
+                </button>
+              )}
+
+              {/* Photo Image */}
               <img
                 src={activePhotoPreview.dataUrl}
-                alt="Preview"
-                className="max-h-[80vh] w-auto rounded-lg object-contain border border-[#232a3e]"
+                alt="Full resolution preview"
+                className={`transition-all duration-200 select-none ${
+                  isActualSize
+                    ? 'max-w-none cursor-zoom-out'
+                    : 'max-w-full max-h-[85vh] sm:max-h-[88vh] object-contain rounded-lg shadow-2xl cursor-zoom-in'
+                }`}
+                style={isActualSize ? { width: `${activePhotoPreview.metadata.width}px` } : undefined}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsActualSize(!isActualSize);
+                }}
               />
-              <div className="mt-2 text-xs font-mono text-slate-400">
-                {activePhotoPreview.metadata.compressedSizeKB} KB •{' '}
-                {new Date(activePhotoPreview.metadata.uploadedAt).toLocaleTimeString()}
-              </div>
+
+              {/* Next Photo Button */}
+              {modalPhotos.length > 1 && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleNextPhoto();
+                  }}
+                  className="absolute right-2 sm:right-4 z-20 p-2 sm:p-3 rounded-full bg-black/60 hover:bg-black/80 text-white border border-white/10 backdrop-blur-sm transition"
+                  title="Next photo (Arrow Right)"
+                >
+                  <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6" />
+                </button>
+              )}
+            </div>
+
+            {/* Bottom Bar: Instructions & Toast */}
+            <div className="p-3 bg-gradient-to-t from-black/80 to-transparent flex items-center justify-between text-slate-400 text-xs font-mono">
+              <span className="hidden sm:inline">
+                Tap photo to toggle 100% full size • Use arrow buttons to navigate
+              </span>
+              <span className="sm:hidden">
+                Tap photo to toggle full size
+              </span>
+
+              {saveToast && (
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 px-4 py-2 rounded-full bg-emerald-500 text-slate-950 font-bold text-xs shadow-2xl animate-in fade-in slide-in-from-bottom-2 z-30">
+                  {saveToast}
+                </div>
+              )}
             </div>
           </div>
         )}
