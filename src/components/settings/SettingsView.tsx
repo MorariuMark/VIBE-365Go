@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { AppDataBackup, UserSettings } from '@/types';
+import { AppDataBackup, UserSettings, UserAccount } from '@/types';
 import { getStoredData, saveStoredData } from '@/lib/storage';
 import { clearPhotoVault } from '@/lib/photoStorage';
 import { MODEL_CATALOGUE, getModelsForProvider } from '@/lib/ai/models';
@@ -29,10 +29,14 @@ import {
   AlertTriangle,
   RotateCcw,
   RefreshCw,
+  LogOut,
+  ShieldCheck,
 } from 'lucide-react';
 
 interface SettingsViewProps {
   appData: AppDataBackup;
+  currentUser?: UserAccount | null;
+  onLogout?: () => void;
   onUpdateSettings: (patch: Partial<UserSettings>) => void;
   onExportBackup: () => void;
   onImportBackup: (importedData: AppDataBackup) => void;
@@ -40,6 +44,8 @@ interface SettingsViewProps {
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
   appData,
+  currentUser,
+  onLogout,
   onUpdateSettings,
   onExportBackup,
   onImportBackup,
@@ -336,6 +342,57 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       </div>
 
       <form onSubmit={handleSave} className="space-y-6">
+        {/* SECTION 0: ACTIVE ACCOUNT & SECURITY */}
+        {currentUser && (
+          <div className="athletic-card rounded-2xl p-5 border border-emerald-900/40 bg-[#0d121c] space-y-4">
+            <div className="flex items-center justify-between border-b border-[#182234] pb-3">
+              <div className="flex items-center gap-2 text-sm font-bold text-white">
+                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                <span>Active Account &amp; Multi-User Identity</span>
+              </div>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-950/80 text-emerald-300 border border-emerald-800/50">
+                ACTIVE SESSION
+              </span>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-bold text-sm">
+                    {currentUser.username.charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-white leading-tight flex items-center gap-2">
+                      <span>{currentUser.displayName || currentUser.username}</span>
+                      <span className="text-[10px] font-mono font-normal text-emerald-400 bg-emerald-950/60 px-1.5 py-0.2 rounded border border-emerald-800/40">
+                        @{currentUser.username}
+                      </span>
+                    </h4>
+                    <p className="text-[11px] font-mono text-slate-400 mt-0.5">
+                      User ID: {currentUser.id} • Cloud State: {currentUser.stateId}
+                    </p>
+                  </div>
+                </div>
+                <p className="text-[11px] text-slate-400 pt-1">
+                  Your habit streaks, workout weights, and logs are 100% isolated to this account.
+                </p>
+              </div>
+
+              {onLogout && (
+                <button
+                  type="button"
+                  onClick={onLogout}
+                  className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/50 text-xs font-bold transition shadow-sm active-press whitespace-nowrap"
+                  title="Sign out of current account"
+                >
+                  <LogOut className="w-3.5 h-3.5 text-rose-400" />
+                  <span>Log Out / Switch Account</span>
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* SECTION 1: ATHLETE PROFILE & THEME */}
         <div className="athletic-card rounded-2xl p-5 border border-[#1b2233] bg-[#0c101a] space-y-4">
           <div className="flex items-center gap-2 text-sm font-bold text-white border-b border-[#161c2c] pb-3">

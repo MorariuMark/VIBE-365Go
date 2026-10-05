@@ -15,6 +15,8 @@ import {
   SleepLog,
   PhotoMetadata,
   UserSettings,
+  AuthSession,
+  UserAccount,
 } from '@/types';
 import {
   getStoredData,
@@ -38,6 +40,8 @@ import {
 } from '@/lib/storage';
 import { getTodayISO, formatDatePretty, formatSleepDisplay } from '@/lib/utils';
 import { saveCloudDataImmediate } from '@/lib/cloudSync';
+import { getCurrentSession, logout } from '@/lib/auth';
+import { AuthView } from '@/components/auth/AuthView';
 import { ContributionGrid } from '@/components/habits/ContributionGrid';
 import { HabitList } from '@/components/habits/HabitList';
 import { ObjectiveBoard } from '@/components/objectives/ObjectiveBoard';
@@ -78,6 +82,7 @@ import {
   Cloud,
   CloudOff,
   RefreshCw,
+  LogOut,
 } from 'lucide-react';
 import { AIChatView } from '@/components/chat/AIChatView';
 import {
@@ -91,6 +96,8 @@ type ActiveTab = 'habits' | 'fitness' | 'breakers' | 'objectives' | 'tasks' | 's
 type FitnessSubTab = 'calendar' | 'matrix' | 'curves' | 'photos';
 
 export default function Home() {
+  const [session, setSession] = useState<AuthSession | null>(null);
+  const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
   const [data, setData] = useState<AppDataBackup | null>(null);
   const [syncStatus, setSyncStatus] = useState<CloudSyncStatus>('idle');
   const [lastSynced, setLastSynced] = useState<Date | undefined>(undefined);
@@ -104,13 +111,23 @@ export default function Home() {
   const [isTrashModalOpen, setIsTrashModalOpen] = useState(false);
   const [isActionLogModalOpen, setIsActionLogModalOpen] = useState(false);
 
-  // Load from local storage immediately, then fetch from Supabase cloud
+  // Check auth session on startup, then load user-scoped local and cloud data
   useEffect(() => {
-    const loaded = getStoredData();
+    const existingSession = getCurrentSession();
+    if (!existingSession) {
+      setIsAuthChecking(false);
+      return;
+    }
+
+    setSession(existingSession);
+    setIsAuthChecking(false);
+
+    // Load from local storage for this user immediately
+    const loaded = getStoredData(existingSession.user.id);
     setData(loaded);
 
-    // Seamlessly fetch cloud state and merge
-    loadCloudData().then((cloudState) => {
+    // Fetch cloud state for this user and merge
+    loadCloudData(existingSession.user).then((cloudState) => {
       if (cloudState) {
         setData(cloudState);
       }
@@ -125,25 +142,77 @@ export default function Home() {
     return () => unsubscribe();
   }, []);
 
-  // Save to local storage on mutation and debounced sync to Supabase
+  // Save to user-scoped local storage on mutation and debounced sync to Supabase
   const updateData = (updater: (prev: AppDataBackup) => AppDataBackup) => {
     setData((prev) => {
       if (!prev) return prev;
       const next = updater(prev);
-      saveStoredData(next);
-      queueCloudSync(next);
+      saveStoredData(next, session?.user?.id);
+      queueCloudSync(next, session?.user);
       return next;
     });
   };
 
+  // Called when login or signup succeeds
+  const handleAuthSuccess = (newSession: AuthSession, freshData?: AppDataBackup) => {
+    setSession(newSession);
 
+    if (freshData) {
+      setData(freshData);
+    } else {
+      const loaded = getStoredData(newSession.user.id);
+      setData(loaded);
+
+      loadCloudData(newSession.user).then((cloudState) => {
+        if (cloudState) {
+          setData(cloudState);
+        }
+      });
+    }
+
+    subscribeSyncStatus((status, time) => {
+      setSyncStatus(status);
+      setLastSynced(time);
+    });
+  };
+
+  // User logout handler: flushes state, clears session, and presents auth screen
+  const handleLogout = async () => {
+    if (data && session?.user) {
+      await saveCloudDataImmediate(data, session.user);
+    }
+    logout();
+    setSession(null);
+    setData(null);
+    setActiveTab('habits');
+  };
+
+  if (isAuthChecking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#07080c] text-white">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+          <span className="text-xs font-mono tracking-widest text-slate-400 uppercase">
+            AUTHENTICATING VIBE 365 OS...
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  // Not logged in: show Login / Sign Up page
+  if (!session) {
+    return <AuthView onAuthSuccess={handleAuthSuccess} />;
+  }
+
+  // Logged in, loading user data
   if (!data) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#07080c] text-white">
         <div className="flex flex-col items-center gap-4">
           <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
           <span className="text-xs font-mono tracking-widest text-slate-400 uppercase">
-            INITIALIZING VIBE 365 OS...
+            INITIALIZING WORKSPACE FOR {session.user.username.toUpperCase()}...
           </span>
         </div>
       </div>
@@ -839,7 +908,10 @@ export default function Home() {
     )}`;
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute('href', jsonString);
-    downloadAnchor.setAttribute('download', `VIBE365_BACKUP_${getTodayISO()}.json`);
+    downloadAnchor.setAttribute(
+      'download',
+      `VIBE365_BACKUP_${session?.user?.username || 'USER'}_${getTodayISO()}.json`
+    );
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
@@ -848,8 +920,8 @@ export default function Home() {
   const handleImportBackup = async (importedData: AppDataBackup) => {
     const normalized = normalizeAppData(importedData);
     setData(normalized);
-    saveStoredData(normalized);
-    await saveCloudDataImmediate(normalized);
+    saveStoredData(normalized, session?.user?.id);
+    await saveCloudDataImmediate(normalized, session?.user);
   };
 
   // Previous day weight comparison
@@ -1195,6 +1267,35 @@ export default function Home() {
               </span>
             </button>
 
+            {/* Active User Identity Pill & Quick Logout */}
+            {session?.user && (
+              <div className="flex items-center gap-1 sm:gap-2 pl-1 sm:pl-2 border-l border-[#1f2638]">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('settings')}
+                  className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-[#0e131d] hover:bg-[#151c2a] border border-[#212a3d] cursor-pointer transition text-left"
+                  title={`Signed in as ${session.user.displayName || session.user.username} (Click to open settings)`}
+                >
+                  <div className="w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-[10px] font-bold text-emerald-400">
+                    {session.user.username.charAt(0).toUpperCase()}
+                  </div>
+                  <span className="text-xs font-semibold text-slate-200 hidden md:inline">
+                    {session.user.displayName || session.user.username}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-rose-950/20 hover:bg-rose-900/40 text-rose-300 hover:text-rose-200 border border-rose-800/30 text-xs font-medium transition active-press"
+                  title={`Sign out of ${session.user.username}`}
+                >
+                  <LogOut className="w-3.5 h-3.5 text-rose-400" />
+                  <span className="hidden xl:inline text-[11px]">Logout</span>
+                </button>
+              </div>
+            )}
+
           </div>
         </div>
       </header>
@@ -1520,6 +1621,8 @@ export default function Home() {
         {activeTab === 'settings' && (
           <SettingsView
             appData={data}
+            currentUser={session?.user}
+            onLogout={handleLogout}
             onUpdateSettings={handleUpdateSettings}
             onExportBackup={handleExportBackup}
             onImportBackup={handleImportBackup}
@@ -1570,6 +1673,7 @@ export default function Home() {
           onClose={() => setIsDataModalOpen(false)}
           onDataLoaded={(newData) => setData(newData)}
           currentData={data}
+          currentUser={session?.user}
           syncStatus={syncStatus}
           lastSynced={lastSynced}
         />

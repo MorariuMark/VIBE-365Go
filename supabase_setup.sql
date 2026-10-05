@@ -6,6 +6,10 @@
 -- ==============================================================================
 
 -- 1. Create table for seamless cloud application state synchronization
+-- Supports multi-account user state:
+--   - 'vibe_users_registry': Encrypted accounts registry (usernames, salts, SHA-256 password hashes)
+--   - 'user_state_mark': Mark's isolated account data state (mirrored to 'primary_user_state')
+--   - 'user_state_<userId>': Isolated private data state for each newly registered athlete
 CREATE TABLE IF NOT EXISTS public.vibe_app_state (
     id TEXT PRIMARY KEY DEFAULT 'primary_user_state',
     payload JSONB NOT NULL,

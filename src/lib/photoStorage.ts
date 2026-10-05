@@ -1,5 +1,6 @@
 import { PhotoMetadata } from '@/types';
 import { supabase } from './supabaseClient';
+import { getCurrentSession } from './auth';
 
 const DB_NAME = 'VibePhotoVaultDB';
 const DB_VERSION = 1;
@@ -55,7 +56,8 @@ function dataUrlToBlob(dataUrl: string): Blob {
 export async function savePhotoToVault(
   id: string,
   dataUrl: string,
-  metadata: PhotoMetadata
+  metadata: PhotoMetadata,
+  userId?: string
 ): Promise<void> {
   // 1. Save to local IndexedDB for immediate offline access
   try {
@@ -82,7 +84,9 @@ export async function savePhotoToVault(
   try {
     const blob = dataUrlToBlob(dataUrl);
     const extension = metadata.mimeType ? metadata.mimeType.split('/')[1] || 'jpg' : 'jpg';
-    const filePath = `${metadata.dateISO}/${id}.${extension}`;
+    const activeUserId = userId || getCurrentSession()?.user?.id;
+    const userPrefix = activeUserId ? `${activeUserId}/` : '';
+    const filePath = `${userPrefix}${metadata.dateISO}/${id}.${extension}`;
 
     const { data: uploadData, error: uploadErr } = await supabase.storage
       .from('photos')

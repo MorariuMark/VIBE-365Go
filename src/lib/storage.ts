@@ -21,34 +21,54 @@ import {
 import { getFullDefaultBackup, INITIAL_MUSCLE_GROUPS, INITIAL_GYM_PROFILE, INITIAL_SETTINGS } from './initialData';
 import { parseSleepDuration } from './utils';
 
-const STORAGE_KEY = 'vibe_tracker_app_data_v2';
+export const DEFAULT_STORAGE_KEY = 'vibe_tracker_app_data_v2';
 
-export function resetAllDataToFresh(): AppDataBackup {
+export function getUserStorageKey(userId?: string): string {
+  if (!userId) return DEFAULT_STORAGE_KEY;
+  return `vibe_tracker_app_data_v2_${userId}`;
+}
+
+export function resetAllDataToFresh(userId?: string): AppDataBackup {
   const fresh = getFullDefaultBackup();
-  saveStoredData(fresh);
+  saveStoredData(fresh, userId);
   return fresh;
 }
 
-export function getStoredData(): AppDataBackup {
+export function getStoredData(userId?: string): AppDataBackup {
   if (typeof window === 'undefined') {
     return getFullDefaultBackup();
   }
 
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const key = getUserStorageKey(userId);
+    let raw = localStorage.getItem(key);
+
+    // If no data exists under this user key yet:
+    if (!raw) {
+      // If this is Mark, check if legacy primary data exists to seamlessly migrate it
+      const isMark = userId === 'user_mark' || userId === 'mark';
+      if (isMark) {
+        const legacyRaw = localStorage.getItem(DEFAULT_STORAGE_KEY);
+        if (legacyRaw) {
+          raw = legacyRaw;
+          localStorage.setItem(key, legacyRaw);
+        }
+      }
+    }
+
     if (!raw) {
       const initial = getFullDefaultBackup();
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(initial));
+      localStorage.setItem(key, JSON.stringify(initial));
       return initial;
     }
+
     const parsed = JSON.parse(raw) as AppDataBackup;
     // Basic structural check
     if (!parsed.habits || !parsed.workoutLogs || !parsed.muscleGroups) {
       const fallback = getFullDefaultBackup();
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(fallback));
+      localStorage.setItem(key, JSON.stringify(fallback));
       return fallback;
     }
-
 
     // Ensure migrations for new collections
     if (!parsed.trash) parsed.trash = [];
@@ -87,10 +107,17 @@ export function getStoredData(): AppDataBackup {
   }
 }
 
-export function saveStoredData(data: AppDataBackup): void {
+export function saveStoredData(data: AppDataBackup, userId?: string): void {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    const key = getUserStorageKey(userId);
+    localStorage.setItem(key, JSON.stringify(data));
+
+    // If Mark or default, also update legacy storage key to keep Mark's backup 100% in sync
+    const isMark = !userId || userId === 'user_mark' || userId === 'mark';
+    if (isMark) {
+      localStorage.setItem(DEFAULT_STORAGE_KEY, JSON.stringify(data));
+    }
   } catch (err) {
     console.error('Failed to save data to localStorage', err);
   }
@@ -175,8 +202,8 @@ export function normalizeAppData(raw: any): AppDataBackup {
   };
 }
 
-export function exportDataAsJSON(): void {
-  const data = getStoredData();
+export function exportDataAsJSON(userId?: string): void {
+  const data = getStoredData(userId);
   const normalized = normalizeAppData(data);
   normalized.exportedAt = new Date().toISOString();
   const jsonStr = JSON.stringify(normalized, null, 2);
@@ -191,14 +218,14 @@ export function exportDataAsJSON(): void {
   URL.revokeObjectURL(url);
 }
 
-export function importDataFromJSON(jsonText: string): AppDataBackup {
+export function importDataFromJSON(jsonText: string, userId?: string): AppDataBackup {
   const parsed = JSON.parse(jsonText);
   if (!parsed || typeof parsed !== 'object') {
     throw new Error('Invalid backup file format: file must contain a valid JSON object.');
   }
 
   const normalized = normalizeAppData(parsed);
-  saveStoredData(normalized);
+  saveStoredData(normalized, userId);
   return normalized;
 }
 

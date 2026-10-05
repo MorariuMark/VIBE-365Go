@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
-import { AppDataBackup } from '@/types';
+import { AppDataBackup, UserAccount } from '@/types';
 import { exportDataAsJSON, importDataFromJSON, saveStoredData, resetAllDataToFresh } from '@/lib/storage';
 import { getFullDefaultBackup, getMockSampleBackup } from '@/lib/initialData';
 import {
@@ -23,6 +23,7 @@ interface DataManagementModalProps {
   onClose: () => void;
   onDataLoaded: (newData: AppDataBackup) => void;
   currentData?: AppDataBackup;
+  currentUser?: UserAccount | null;
   syncStatus?: CloudSyncStatus;
   lastSynced?: Date;
 }
@@ -31,6 +32,7 @@ export const DataManagementModal: React.FC<DataManagementModalProps> = ({
   onClose,
   onDataLoaded,
   currentData,
+  currentUser,
   syncStatus = 'idle',
   lastSynced,
 }) => {
@@ -42,13 +44,13 @@ export const DataManagementModal: React.FC<DataManagementModalProps> = ({
   const handleWipeAndStartFresh = async () => {
     if (
       window.confirm(
-        'Erase all data and start completely fresh? This will wipe all habits, workouts, objectives, breakers, tasks, and sleep logs.'
+        'Erase all data and start completely fresh? This will wipe all habits, workouts, objectives, breakers, tasks, and sleep logs for this account.'
       )
     ) {
-      const fresh = resetAllDataToFresh();
+      const fresh = resetAllDataToFresh(currentUser?.id);
       onDataLoaded(fresh);
-      await saveCloudDataImmediate(fresh);
-      setSuccessMessage('Successfully erased all data and started completely fresh.');
+      await saveCloudDataImmediate(fresh, currentUser);
+      setSuccessMessage('Successfully erased data for this account and started completely fresh.');
       setErrorMessage(null);
     }
   };
@@ -58,9 +60,9 @@ export const DataManagementModal: React.FC<DataManagementModalProps> = ({
     setIsCloudBusy(true);
     setErrorMessage(null);
     try {
-      const ok = await saveCloudDataImmediate(currentData);
+      const ok = await saveCloudDataImmediate(currentData, currentUser);
       if (ok) {
-        setSuccessMessage('Successfully pushed latest data to Supabase cloud.');
+        setSuccessMessage('Successfully pushed latest account data to Supabase cloud.');
       } else {
         setErrorMessage('Cloud push failed. Make sure you ran supabase_setup.sql in Supabase.');
       }
@@ -75,12 +77,12 @@ export const DataManagementModal: React.FC<DataManagementModalProps> = ({
     setIsCloudBusy(true);
     setErrorMessage(null);
     try {
-      const cloudData = await loadCloudData();
+      const cloudData = await loadCloudData(currentUser);
       if (cloudData) {
         onDataLoaded(cloudData);
-        setSuccessMessage('Successfully restored state from Supabase cloud.');
+        setSuccessMessage('Successfully restored account state from Supabase cloud.');
       } else {
-        setErrorMessage('No cloud record found yet or table not ready. Run supabase_setup.sql in Supabase.');
+        setErrorMessage('No cloud record found yet for this account or table not ready.');
       }
     } catch (err: any) {
       setErrorMessage(err.message || 'Cloud pull error');
@@ -91,8 +93,8 @@ export const DataManagementModal: React.FC<DataManagementModalProps> = ({
 
   const handleExport = () => {
     try {
-      exportDataAsJSON();
-      setSuccessMessage('Backup successfully exported.');
+      exportDataAsJSON(currentUser?.id);
+      setSuccessMessage('Account backup successfully exported.');
       setErrorMessage(null);
     } catch (err: any) {
       setErrorMessage(err.message || 'Export failed.');
@@ -107,10 +109,10 @@ export const DataManagementModal: React.FC<DataManagementModalProps> = ({
     reader.onload = async (event) => {
       try {
         const text = event.target?.result as string;
-        const imported = importDataFromJSON(text);
+        const imported = importDataFromJSON(text, currentUser?.id);
         onDataLoaded(imported);
-        await saveCloudDataImmediate(imported);
-        setSuccessMessage('Data successfully restored and synced to cloud.');
+        await saveCloudDataImmediate(imported, currentUser);
+        setSuccessMessage('Account data successfully restored and synced to cloud.');
         setErrorMessage(null);
       } catch (err: any) {
         setErrorMessage('Invalid backup format: ' + (err.message || ''));
@@ -122,14 +124,14 @@ export const DataManagementModal: React.FC<DataManagementModalProps> = ({
   const handleResetToDemo = async () => {
     if (
       window.confirm(
-        'Load sample template dataset? This will load rich demo habits, objectives, and progressive overload gym logs.'
+        'Load sample template dataset? This will load rich demo habits, objectives, and progressive overload gym logs for this account.'
       )
     ) {
       const demo = getMockSampleBackup();
-      saveStoredData(demo);
+      saveStoredData(demo, currentUser?.id);
       onDataLoaded(demo);
-      await saveCloudDataImmediate(demo);
-      setSuccessMessage('Loaded demo sample data and synced to cloud.');
+      await saveCloudDataImmediate(demo, currentUser);
+      setSuccessMessage('Loaded demo sample data for this account and synced to cloud.');
       setErrorMessage(null);
     }
   };

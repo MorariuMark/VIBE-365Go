@@ -312,3 +312,36 @@ export interface AppDataBackup {
   fitnessPhotos: Record<string, PhotoMetadata[]>; // dateISO -> photo metadata list
   settings?: UserSettings;
 }
+
+// -------------------------------------------------------------
+// Authentication & Multi-Account System
+// -------------------------------------------------------------
+export interface UserAccount {
+  id: string; // e.g. "user_mark"
+  username: string; // Displayed username e.g. "Mark"
+  displayName: string;
+  stateId: string; // Supabase state table key e.g. "user_state_mark"
+  createdAt: string;
+  lastLoginAt?: string;
+}
+
+export type AppUserAccount = UserAccount;
+
+export interface StoredUserRecord extends UserAccount {
+  passwordHash: string;
+  salt: string;
+}
+
+export interface AuthSession {
+  user: UserAccount;
+  token: string;
+  createdAt: string;
+  expiresAt: string;
+  keepMeLoggedIn: boolean;
+}
+
+export interface UsersRegistry {
+  version: string;
+  users: StoredUserRecord[];
+  updatedAt: string;
+}
