@@ -72,6 +72,7 @@ interface DayWorkoutModalProps {
   fitnessPhotos?: Record<string, PhotoMetadata[]>;
   onSavePhotoMetadata?: (metadata: PhotoMetadata) => void;
   onDeletePhotoMetadata?: (photoId: string, dateISO: string) => void;
+  onDeleteWorkoutDay?: (dateISO: string) => void;
 }
 
 export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
@@ -88,6 +89,7 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
   fitnessPhotos,
   onSavePhotoMetadata,
   onDeletePhotoMetadata,
+  onDeleteWorkoutDay,
 }) => {
   // Determine default split & active muscle groups based on default templates
   const initialSplit: SplitType = workout?.splitType || 'push';
@@ -800,6 +802,26 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2 self-end sm:self-center">
+            {onDeleteWorkoutDay && workout && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      `Delete this entire workout day (${formatDatePretty(dateISO)})? All exercises and sets for this session will be moved to Trash (restorable for 30 days).`
+                    )
+                  ) {
+                    onDeleteWorkoutDay(dateISO);
+                    onClose();
+                  }
+                }}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/50 font-semibold text-xs transition active-press cursor-pointer"
+                title="Delete this entire workout day"
+              >
+                <Trash2 className="w-4 h-4 text-rose-400" />
+                <span className="hidden sm:inline">Delete Day</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={handleSaveAll}

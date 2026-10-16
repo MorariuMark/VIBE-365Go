@@ -96,6 +96,7 @@ import {
   syncCloudImmediate,
   saveCloudDataImmediate,
   subscribeSyncStatus,
+  subscribeToCloudChanges,
   flushPendingOfflineSync,
 } from '@/lib/cloudSync';
 import {
@@ -179,6 +180,61 @@ export default function Home() {
 
     return () => unsubscribe();
   }, []);
+
+  // Realtime multi-device cloud listener & active focus revalidation
+  useEffect(() => {
+    if (!session?.user) return;
+
+    // 1. Supabase Realtime Postgres Changes Subscription
+    const unsubRealtime = subscribeToCloudChanges(session.user, (freshData) => {
+      setData((prev) => {
+        if (!prev) return freshData;
+        if (JSON.stringify(prev) === JSON.stringify(freshData)) return prev;
+        return freshData;
+      });
+      setLastSynced(new Date());
+    });
+
+    // 2. Tab focus & visibility change listener: auto-fetch cloud data whenever returning to PC
+    const handleRevalidate = () => {
+      if (document.visibilityState === 'visible') {
+        loadCloudData(session.user).then((cloudState) => {
+          if (cloudState) {
+            setData((prev) => {
+              if (!prev) return cloudState;
+              if (JSON.stringify(prev) === JSON.stringify(cloudState)) return prev;
+              return cloudState;
+            });
+          }
+        });
+      }
+    };
+
+    window.addEventListener('focus', handleRevalidate);
+    document.addEventListener('visibilitychange', handleRevalidate);
+
+    // 3. Periodic background poll (every 20s while tab is visible) for seamless cross-device syncing
+    const pollInterval = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        loadCloudData(session.user).then((cloudState) => {
+          if (cloudState) {
+            setData((prev) => {
+              if (!prev) return cloudState;
+              if (JSON.stringify(prev) === JSON.stringify(cloudState)) return prev;
+              return cloudState;
+            });
+          }
+        });
+      }
+    }, 20000);
+
+    return () => {
+      unsubRealtime();
+      window.removeEventListener('focus', handleRevalidate);
+      document.removeEventListener('visibilitychange', handleRevalidate);
+      window.clearInterval(pollInterval);
+    };
+  }, [session?.user?.id]);
 
   // Save to user-scoped local storage on mutation and trigger immediate zero-delay Supabase sync
   const updateData = (
@@ -997,13 +1053,18 @@ export default function Home() {
 
   // Immediate Live Supabase Cloud Sync Action
   const handleTriggerLiveSync = async () => {
-    if (!data || !session?.user) return;
+    if (!session?.user) return;
     showActionToast('Syncing live with Supabase Cloud...');
-    const ok = await syncCloudImmediate(data, session.user);
-    if (ok) {
-      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      showActionToast(`✓ Live synced to Supabase database! (${timeStr})`);
-    } else {
+    try {
+      const freshCloudData = await loadCloudData(session.user);
+      if (freshCloudData) {
+        setData(freshCloudData);
+        const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        showActionToast(`✓ Live synced to Supabase database! (${timeStr})`);
+      } else {
+        showActionToast('Sync completed with local state.');
+      }
+    } catch (err: any) {
       showActionToast('Cloud sync failed or offline. Changes saved locally.');
     }
   };
@@ -1847,6 +1908,10 @@ export default function Home() {
           fitnessPhotos={data.fitnessPhotos || {}}
           onSavePhotoMetadata={handleSaveFitnessPhoto}
           onDeletePhotoMetadata={handleDeleteFitnessPhoto}
+          onDeleteWorkoutDay={(dateISO) => {
+            handleDeleteWorkout(dateISO);
+            showActionToast(`✓ Deleted workout day (${formatDatePretty(dateISO)})`);
+          }}
         />
       )}
 

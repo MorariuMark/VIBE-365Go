@@ -283,19 +283,24 @@ export async function loadCloudData(user?: UserAccount | null): Promise<AppDataB
     let cloudPayload: AppDataBackup | null = null;
 
     if (isMark) {
-      // For Mark, query BOTH user_state_mark and primary_user_state to guarantee all past workouts are included
-      const [markRes, primaryRes] = await Promise.all([
-        supabase.from('vibe_app_state').select('payload, updated_at').eq('id', 'user_state_mark').maybeSingle(),
-        supabase.from('vibe_app_state').select('payload, updated_at').eq('id', 'primary_user_state').maybeSingle(),
-      ]);
+      // Prioritize user_state_mark which is the primary dedicated account record
+      const { data: markRes, error: markErr } = await supabase
+        .from('vibe_app_state')
+        .select('payload, updated_at')
+        .eq('id', 'user_state_mark')
+        .maybeSingle();
 
-      const markData = markRes.data?.payload ? normalizeAppData(markRes.data.payload) : null;
-      const primaryData = primaryRes.data?.payload ? normalizeAppData(primaryRes.data.payload) : null;
-
-      if (markData && primaryData) {
-        cloudPayload = mergeAppData(primaryData, markData);
+      if (!markErr && markRes?.payload) {
+        cloudPayload = normalizeAppData(markRes.payload);
       } else {
-        cloudPayload = markData || primaryData;
+        const { data: primaryRes } = await supabase
+          .from('vibe_app_state')
+          .select('payload, updated_at')
+          .eq('id', 'primary_user_state')
+          .maybeSingle();
+        if (primaryRes?.payload) {
+          cloudPayload = normalizeAppData(primaryRes.payload);
+        }
       }
     } else {
       // For other accounts, retrieve their isolated cloud slot
@@ -316,33 +321,30 @@ export async function loadCloudData(user?: UserAccount | null): Promise<AppDataB
       }
     }
 
-    // Merge cloud data with device local storage & offline queue so offline/local workouts are retained
     const local = getStoredData(user?.id);
     const pendingOffline = getPendingOfflineSync();
-    let effectiveLocal = local;
-
-    if (pendingOffline?.payload) {
-      effectiveLocal = mergeAppData(local, normalizeAppData(pendingOffline.payload));
-    }
 
     let finalPayload: AppDataBackup;
-    if (cloudPayload && effectiveLocal) {
-      finalPayload = mergeAppData(effectiveLocal, cloudPayload);
-    } else if (cloudPayload) {
-      finalPayload = cloudPayload;
+
+    if (cloudPayload) {
+      if (pendingOffline?.payload) {
+        // If this device explicitly accumulated offline mutations while disconnected,
+        // merge them on top of the fresh cloud state and sync back
+        finalPayload = mergeAppData(cloudPayload, normalizeAppData(pendingOffline.payload));
+        await syncCloudImmediate(finalPayload, user);
+        clearPendingOfflineSync();
+      } else {
+        // NO un-synced offline edits waiting on this device:
+        // Cloud state from Supabase IS the single source of truth!
+        // This ensures changes made on phone immediately and seamlessly reflect on PC!
+        finalPayload = cloudPayload;
+      }
     } else {
-      finalPayload = effectiveLocal;
+      finalPayload = local;
     }
 
-    // Save final merged state to local storage
+    // Update this device's local storage with the authoritative state
     saveStoredData(finalPayload, user?.id);
-
-    // Sync merged state back to cloud so both slots are completely up-to-date
-    await syncCloudImmediate(finalPayload, user);
-
-    // Clear any pending offline queue since we've merged and synced
-    clearPendingOfflineSync();
-
     notifyListeners('synced');
     return finalPayload;
   } catch (err: any) {
@@ -350,6 +352,49 @@ export async function loadCloudData(user?: UserAccount | null): Promise<AppDataB
     notifyListeners('offline', err?.message);
     return null;
   }
+}
+
+/**
+ * Real-time cloud subscription using Supabase Postgres Changes.
+ * When changes are made on another device (e.g. phone), Supabase broadcasts
+ * the change live. The PC receives it in <100ms and updates the screen seamlessly!
+ */
+export function subscribeToCloudChanges(
+  user: UserAccount | null | undefined,
+  onRemoteChange: (newData: AppDataBackup) => void
+): () => void {
+  if (typeof window === 'undefined') return () => {};
+
+  const stateId = getCloudStateId(user);
+  const channelName = `realtime_${stateId}_${Date.now()}`;
+
+  const channel = supabase
+    .channel(channelName)
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'vibe_app_state',
+        filter: `id=eq.${stateId}`,
+      },
+      (change) => {
+        if (change.new && (change.new as any).payload) {
+          console.log('[CloudSync Realtime] Live cloud update received for', stateId);
+          const freshData = normalizeAppData((change.new as any).payload);
+          saveStoredData(freshData, user?.id);
+          notifyListeners('synced');
+          onRemoteChange(freshData);
+        }
+      }
+    )
+    .subscribe((status) => {
+      console.log(`[CloudSync Realtime] Subscribed to ${stateId} with status:`, status);
+    });
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
 }
 
 // Mobile and browser lifecycle automatic flush listeners

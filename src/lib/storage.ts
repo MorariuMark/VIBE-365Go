@@ -706,6 +706,25 @@ export function moveToTrash(
   );
 }
 
+/**
+ * Deletes a whole workout day log and moves it to the 30-day trash vault
+ */
+export function deleteWorkoutDay(
+  data: AppDataBackup,
+  dateISO: string
+): AppDataBackup {
+  const target = data.workoutLogs?.[dateISO];
+  if (!target) return data;
+  return moveToTrash(
+    data,
+    'workout',
+    dateISO,
+    target.title || `Workout on ${dateISO}`,
+    `${(target.splitType || 'workout').toUpperCase()} • ${target.exercises?.length || 0} exercises`,
+    target
+  );
+}
+
 export function restoreFromTrash(prev: AppDataBackup, trashId: string): AppDataBackup {
   const item = (prev.trash || []).find((t) => t.id === trashId);
   if (!item) return prev;
