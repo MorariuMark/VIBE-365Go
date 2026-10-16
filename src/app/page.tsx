@@ -995,6 +995,19 @@ export default function Home() {
     }
   };
 
+  // Immediate Live Supabase Cloud Sync Action
+  const handleTriggerLiveSync = async () => {
+    if (!data || !session?.user) return;
+    showActionToast('Syncing live with Supabase Cloud...');
+    const ok = await syncCloudImmediate(data, session.user);
+    if (ok) {
+      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      showActionToast(`✓ Live synced to Supabase database! (${timeStr})`);
+    } else {
+      showActionToast('Cloud sync failed or offline. Changes saved locally.');
+    }
+  };
+
   // Fitness Photo Metadata Handlers (<1MB Optimized)
   const handleSaveFitnessPhoto = (photoMeta: PhotoMetadata) => {
     updateData((prev) => saveFitnessPhotoMetadata(prev, photoMeta));
@@ -1343,17 +1356,11 @@ export default function Home() {
               )}
             </button>
 
-            {/* Supabase Cloud Sync Status Button */}
+            {/* Supabase Cloud Sync Action Button (Forces instant live sync) */}
             <button
               type="button"
-              onClick={() => {
-                if ((syncStatus === 'offline' || syncStatus === 'error') && data && session?.user) {
-                  syncCloudImmediate(data, session.user);
-                } else {
-                  setIsDataModalOpen(true);
-                }
-              }}
-              className={`flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-lg border text-xs font-medium transition active-press ${
+              onClick={handleTriggerLiveSync}
+              className={`flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-lg border text-xs font-medium transition active-press cursor-pointer ${
                 syncStatus === 'synced'
                   ? 'bg-emerald-950/30 text-emerald-300 border-emerald-700/50 hover:bg-emerald-900/40'
                   : syncStatus === 'syncing'
@@ -1366,14 +1373,8 @@ export default function Home() {
               }`}
               title={
                 syncStatus === 'synced'
-                  ? `Cloud Synced${lastSynced ? ` at ${lastSynced.toLocaleTimeString()}` : ''} (Click to open Data & Safety Snapshots)`
-                  : syncStatus === 'syncing'
-                  ? 'Syncing changes to Supabase cloud immediately...'
-                  : syncStatus === 'offline'
-                  ? 'Offline / Pending Sync (Tap to retry sync now)'
-                  : syncStatus === 'error'
-                  ? 'Sync error occurred (Tap to retry sync now)'
-                  : 'Supabase Cloud Sync & Backup'
+                  ? `Cloud Synced${lastSynced ? ` at ${lastSynced.toLocaleTimeString()}` : ''} (Tap to force live sync now)`
+                  : 'Tap to sync changes to Supabase cloud immediately'
               }
             >
               {syncStatus === 'syncing' ? (
@@ -1391,13 +1392,24 @@ export default function Home() {
                 {syncStatus === 'synced'
                   ? 'Synced'
                   : syncStatus === 'syncing'
-                  ? 'Syncing'
+                  ? 'Syncing...'
                   : syncStatus === 'offline'
-                  ? 'Offline (Retry)'
+                  ? 'Offline (Tap)'
                   : syncStatus === 'error'
                   ? 'Retry'
-                  : 'Cloud'}
+                  : 'Sync'}
               </span>
+            </button>
+
+            {/* Data Vault & Backups Modal Button */}
+            <button
+              type="button"
+              onClick={() => setIsDataModalOpen(true)}
+              className="flex items-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-lg bg-[#0d1017] hover:bg-[#141924] text-slate-400 hover:text-slate-200 border border-[#1c2234] text-xs font-medium transition cursor-pointer"
+              title="Open Data Management, Cloud Vault & Snapshots"
+            >
+              <Database className="w-3.5 h-3.5 text-indigo-400" />
+              <span className="hidden xl:inline font-mono text-[11px]">Vault</span>
             </button>
 
             {/* Active User Identity Pill & Quick Logout */}
