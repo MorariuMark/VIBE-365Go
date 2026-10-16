@@ -83,6 +83,9 @@ import {
   RefreshCw,
   LogOut,
   AlertTriangle,
+  Download,
+  ExternalLink,
+  X,
 } from 'lucide-react';
 import { AIChatView } from '@/components/chat/AIChatView';
 import {
@@ -94,6 +97,12 @@ import {
   subscribeSyncStatus,
   flushPendingOfflineSync,
 } from '@/lib/cloudSync';
+import {
+  checkDailyBackupStatus,
+  triggerInstantBackupDownload,
+  openGoogleDriveBackupFolder,
+  recordDailyBackup,
+} from '@/lib/dailyBackup';
 
 type ActiveTab = 'habits' | 'fitness' | 'breakers' | 'objectives' | 'tasks' | 'sleep' | 'chat' | 'settings';
 type FitnessSubTab = 'calendar' | 'matrix' | 'curves' | 'photos';
@@ -114,6 +123,10 @@ export default function Home() {
   const [isTrashModalOpen, setIsTrashModalOpen] = useState(false);
   const [isActionLogModalOpen, setIsActionLogModalOpen] = useState(false);
 
+  // Daily Google Drive Backup Reminder State
+  const [backupReminderDismissed, setBackupReminderDismissed] = useState<boolean>(false);
+  const [dailyBackupStatus, setDailyBackupStatus] = useState<{ backedUpToday: boolean; lastBackupDate?: string } | null>(null);
+
   // Check auth session on startup, then load user-scoped local and cloud data
   useEffect(() => {
     const existingSession = getCurrentSession();
@@ -128,6 +141,12 @@ export default function Home() {
     // Load from local storage for this user immediately
     const loaded = getStoredData(existingSession.user.id);
     setData(loaded);
+
+    // Check daily backup status and record initial automatic backup
+    setDailyBackupStatus(checkDailyBackupStatus(existingSession.user.id));
+    if (loaded) {
+      recordDailyBackup(loaded, existingSession.user);
+    }
 
     // Fetch cloud state for this user and merge
     loadCloudData(existingSession.user).then((cloudState) => {
@@ -157,6 +176,8 @@ export default function Home() {
       if (!prev) return prev;
       const next = updater(prev);
       saveStoredData(next, session?.user?.id);
+      // Automatic daily structured backup snapshot
+      recordDailyBackup(next, session?.user);
       if (options?.immediate ?? true) {
         syncCloudImmediate(next, session?.user);
       } else {
@@ -898,6 +919,46 @@ export default function Home() {
     updateData((prev) => deleteSleepLog(prev, dateISO));
   };
 
+  const handleBulkImportSleepLogs = (importedLogs: Record<string, SleepLog>) => {
+    const count = Object.keys(importedLogs).length;
+    updateData((prev) => {
+      const mergedSleep = { ...(prev.sleepLogs || {}) };
+      for (const [dateISO, log] of Object.entries(importedLogs)) {
+        if (!mergedSleep[dateISO]) {
+          mergedSleep[dateISO] = log;
+        } else {
+          const ex = mergedSleep[dateISO];
+          mergedSleep[dateISO] = {
+            ...ex,
+            ...log,
+            notes: ex.notes && !ex.notes.includes(log.notes || '')
+              ? `${ex.notes} | ${log.notes || ''}`
+              : (log.notes || ex.notes),
+            photoIds: ex.photoIds && ex.photoIds.length > 0 ? ex.photoIds : (log.photoIds || []),
+            qualityScore: ex.qualityScore !== undefined ? ex.qualityScore : log.qualityScore,
+            updatedAt: new Date().toISOString(),
+          };
+        }
+      }
+
+      const next = { ...prev, sleepLogs: mergedSleep };
+      return recordAction(
+        next,
+        'sleep_log',
+        'apple_health_import',
+        'Apple Health Import',
+        `Imported/updated ${count} sleep logs from Apple Health analysis`
+      );
+    });
+  };
+
+  // Instant Daily Google Drive Backup Handler
+  const handleInstantDailyBackup = () => {
+    if (!data) return;
+    const record = triggerInstantBackupDownload(data, session?.user);
+    setDailyBackupStatus({ backedUpToday: true, lastBackupDate: record.dateISO });
+  };
+
   // Fitness Photo Metadata Handlers (<1MB Optimized)
   const handleSaveFitnessPhoto = (photoMeta: PhotoMetadata) => {
     updateData((prev) => saveFitnessPhotoMetadata(prev, photoMeta));
@@ -1336,6 +1397,50 @@ export default function Home() {
         </div>
       </header>
 
+      {/* Daily Google Drive Backup Reminder Banner */}
+      {!dailyBackupStatus?.backedUpToday && !backupReminderDismissed && data && (
+        <div className="bg-gradient-to-r from-indigo-950/95 via-[#0e1424] to-indigo-950/95 border-b border-indigo-700/50 px-4 py-2.5 shadow-lg">
+          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2.5 text-indigo-200">
+              <div className="p-1.5 rounded-lg bg-indigo-500/20 text-indigo-400 flex-shrink-0">
+                <Cloud className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="font-bold text-white">Daily Backup Reminder:</span>{' '}
+                <span>Export today&apos;s structured performance snapshot to Google Drive.</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 self-stretch sm:self-auto justify-end">
+              <button
+                type="button"
+                onClick={handleInstantDailyBackup}
+                className="px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-[11px] flex items-center gap-1.5 transition active-press shadow-sm cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Export JSON Now</span>
+              </button>
+              <button
+                type="button"
+                onClick={openGoogleDriveBackupFolder}
+                className="px-2.5 py-1.5 rounded-lg bg-blue-950/70 hover:bg-blue-900/80 text-blue-300 border border-blue-700/50 font-semibold text-[11px] flex items-center gap-1.5 transition active-press cursor-pointer"
+                title="Open Google Drive folder in new tab"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>Open Google Drive</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setBackupReminderDismissed(true)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white transition"
+                title="Dismiss reminder for today"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Athletic Performance HUD Strip */}
       <section className="border-b border-[#141824] bg-[#090b10]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5">
@@ -1645,6 +1750,7 @@ export default function Home() {
             onSaveSleepLog={handleSaveSleepLog}
             onDeleteSleepLog={handleDeleteSleepLog}
             targetSleepHours={data.settings?.sleepTargetHours || 8.0}
+            onBulkImportSleepLogs={handleBulkImportSleepLogs}
           />
         )}
 

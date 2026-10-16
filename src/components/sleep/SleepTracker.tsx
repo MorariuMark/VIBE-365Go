@@ -36,7 +36,9 @@ import {
   Zap,
   CheckCircle2,
   RotateCcw,
+  FileJson,
 } from 'lucide-react';
+import { SleepImportModal } from './SleepImportModal';
 
 interface SleepTrackerProps {
   selectedDate: string;
@@ -45,6 +47,7 @@ interface SleepTrackerProps {
   onSaveSleepLog: (sleepLog: SleepLog) => void;
   onDeleteSleepLog: (dateISO: string) => void;
   targetSleepHours?: number;
+  onBulkImportSleepLogs?: (imported: Record<string, SleepLog>) => void;
 }
 
 export const SleepTracker: React.FC<SleepTrackerProps> = ({
@@ -54,6 +57,7 @@ export const SleepTracker: React.FC<SleepTrackerProps> = ({
   onSaveSleepLog,
   onDeleteSleepLog,
   targetSleepHours = 8.0,
+  onBulkImportSleepLogs,
 }) => {
   const currentLog = sleepLogs[selectedDate];
 
@@ -78,10 +82,30 @@ export const SleepTracker: React.FC<SleepTrackerProps> = ({
   const [previewPhoto, setPreviewPhoto] = useState<{ metadata: PhotoMetadata; dataUrl: string } | null>(
     null
   );
+  const [isImportModalOpen, setIsImportModalOpen] = useState<boolean>(false);
+  const [importSuccessMsg, setImportSuccessMsg] = useState<string | null>(null);
 
   // Feedback indicators
   const [showSavedFeedback, setShowSavedFeedback] = useState<boolean>(false);
   const [lastAutoSavedAt, setLastAutoSavedAt] = useState<string | null>(null);
+
+  // Bulk Import Handler
+  const handleBulkImport = (imported: Record<string, SleepLog>) => {
+    if (onBulkImportSleepLogs) {
+      onBulkImportSleepLogs(imported);
+    } else {
+      for (const log of Object.values(imported)) {
+        onSaveRef.current(log);
+      }
+    }
+    const count = Object.keys(imported).length;
+    setImportSuccessMsg(`Imported ${count} nights from Apple Health!`);
+    setShowSavedFeedback(true);
+    setTimeout(() => {
+      setShowSavedFeedback(false);
+      setImportSuccessMsg(null);
+    }, 4000);
+  };
 
   // Keep latest callbacks and state in refs for auto-save and unmount flush
   const onSaveRef = useRef(onSaveSleepLog);
@@ -384,39 +408,52 @@ export const SleepTracker: React.FC<SleepTrackerProps> = ({
             </div>
           </div>
 
-          {/* Date Navigator Strip */}
-          <div className="flex items-center gap-1.5 bg-[#10141e] p-1.5 rounded-xl border border-[#1c2336] self-stretch sm:self-auto justify-between sm:justify-start">
+          {/* Action & Date Navigator Strip */}
+          <div className="flex items-center gap-2 flex-wrap self-stretch sm:self-auto justify-between sm:justify-start">
             <button
-              onClick={() => stepDate(-1)}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-[#182030] transition"
-              title="Previous Day"
+              type="button"
+              onClick={() => setIsImportModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-950/70 hover:bg-indigo-900/90 text-indigo-300 border border-indigo-700/50 text-xs font-semibold font-mono transition active-press shadow-sm"
+              title="Import Apple Health sleep_analysis JSON"
             >
-              <ChevronLeft className="w-4 h-4" />
+              <FileJson className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Import Apple Health JSON</span>
             </button>
 
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => onSelectDate(e.target.value)}
-              className="bg-transparent border-0 text-xs font-mono font-bold text-white focus:outline-none px-2 cursor-pointer"
-            />
-
-            <button
-              onClick={() => stepDate(1)}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-[#182030] transition"
-              title="Next Day"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-
-            {selectedDate !== getTodayISO() && (
+            {/* Date Navigator Strip */}
+            <div className="flex items-center gap-1.5 bg-[#10141e] p-1.5 rounded-xl border border-[#1c2336]">
               <button
-                onClick={() => onSelectDate(getTodayISO())}
-                className="text-[10px] font-mono uppercase px-2 py-1 rounded bg-indigo-950 text-indigo-300 border border-indigo-800/40 hover:bg-indigo-900/60 ml-1 transition"
+                onClick={() => stepDate(-1)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-[#182030] transition"
+                title="Previous Day"
               >
-                Today
+                <ChevronLeft className="w-4 h-4" />
               </button>
-            )}
+
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => onSelectDate(e.target.value)}
+                className="bg-transparent border-0 text-xs font-mono font-bold text-white focus:outline-none px-2 cursor-pointer"
+              />
+
+              <button
+                onClick={() => stepDate(1)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-[#182030] transition"
+                title="Next Day"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+
+              {selectedDate !== getTodayISO() && (
+                <button
+                  onClick={() => onSelectDate(getTodayISO())}
+                  className="text-[10px] font-mono uppercase px-2 py-1 rounded bg-indigo-950 text-indigo-300 border border-indigo-800/40 hover:bg-indigo-900/60 ml-1 transition"
+                >
+                  Today
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -874,6 +911,22 @@ export const SleepTracker: React.FC<SleepTrackerProps> = ({
               />
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Sleep Import Modal (Apple Health / Sleep JSON) */}
+      <SleepImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onImport={handleBulkImport}
+        targetSleepHours={targetSleepHours}
+      />
+
+      {/* Import / Save Success Toast */}
+      {importSuccessMsg && (
+        <div className="fixed bottom-20 sm:bottom-8 right-4 z-50 p-3 rounded-xl bg-emerald-950 border border-emerald-500/60 shadow-2xl flex items-center gap-2 text-xs font-semibold text-emerald-300 animate-in fade-in slide-in-from-bottom-2">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+          <span>{importSuccessMsg}</span>
         </div>
       )}
     </div>

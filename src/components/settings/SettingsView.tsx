@@ -31,7 +31,9 @@ import {
   RefreshCw,
   LogOut,
   ShieldCheck,
+  ExternalLink,
 } from 'lucide-react';
+import { openGoogleDriveBackupFolder, triggerInstantBackupDownload } from '@/lib/dailyBackup';
 
 interface SettingsViewProps {
   appData: AppDataBackup;
@@ -917,24 +919,35 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="space-y-1">
-              <h4 className="text-xs font-bold text-white">Full JSON Application Snapshot</h4>
+              <h4 className="text-xs font-bold text-white">Full JSON Application Snapshot &amp; Google Drive</h4>
               <p className="text-[11px] text-slate-400">
-                Exports all habits, workout logs, breaker records, action audit trail, tasks, sleep logs, and settings.
+                Exports all habits, workout logs, breaker records, action audit trail, tasks, sleep logs, and settings. Structured with exact timestamps for Google Drive archiving.
               </p>
             </div>
 
-            <div className="flex items-center gap-2.5 w-full sm:w-auto">
+            <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
               <button
                 type="button"
-                onClick={onExportBackup}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-[#141926] hover:bg-[#1b2234] text-slate-200 border border-[#252f47] text-xs font-semibold transition"
+                onClick={() => triggerInstantBackupDownload(appData, currentUser)}
+                className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-950/60 hover:bg-indigo-900/80 text-indigo-300 border border-indigo-700/60 text-xs font-semibold transition active-press cursor-pointer"
+                title="Export structured daily JSON"
               >
-                <Download className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Export JSON</span>
+                <Download className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Export Daily JSON</span>
               </button>
 
-              <label className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-[#141926] hover:bg-[#1b2234] text-slate-200 border border-[#252f47] text-xs font-semibold transition cursor-pointer">
-                <Upload className="w-3.5 h-3.5 text-blue-400" />
+              <button
+                type="button"
+                onClick={openGoogleDriveBackupFolder}
+                className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-950/60 hover:bg-blue-900/80 text-blue-300 border border-blue-700/60 text-xs font-semibold transition active-press cursor-pointer"
+                title="Open Google Drive Backup Folder in new tab"
+              >
+                <ExternalLink className="w-3.5 h-3.5 text-blue-400" />
+                <span>Google Drive</span>
+              </button>
+
+              <label className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#141926] hover:bg-[#1b2234] text-slate-200 border border-[#252f47] text-xs font-semibold transition cursor-pointer">
+                <Upload className="w-3.5 h-3.5 text-emerald-400" />
                 <span>Import JSON</span>
                 <input
                   type="file"
