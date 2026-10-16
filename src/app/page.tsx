@@ -1635,6 +1635,7 @@ export default function Home() {
         <DayWorkoutModal
           dateISO={activeWorkoutDate}
           workout={data.workoutLogs[activeWorkoutDate]}
+          workoutLogs={data.workoutLogs || {}}
           muscleGroups={data.muscleGroups}
           previousWeightKg={getPreviousLoggedWeight(activeWorkoutDate)}
           onClose={() => setActiveWorkoutDate(null)}
