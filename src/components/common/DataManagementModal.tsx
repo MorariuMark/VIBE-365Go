@@ -27,6 +27,7 @@ import {
   ShieldCheck,
   History,
   ExternalLink,
+  CloudUpload,
 } from 'lucide-react';
 import {
   CloudSyncStatus,
@@ -40,7 +41,10 @@ import {
   getDailyBackups,
   triggerInstantBackupDownload,
   openGoogleDriveBackupFolder,
+  exportToGoogleDrive,
+  getGoogleDriveToken,
 } from '@/lib/dailyBackup';
+import { GoogleDriveAuthModal } from './GoogleDriveAuthModal';
 
 interface DataManagementModalProps {
   onClose: () => void;
@@ -65,6 +69,9 @@ export const DataManagementModal: React.FC<DataManagementModalProps> = ({
   const [isCloudBusy, setIsCloudBusy] = useState(false);
   const [snapshots, setSnapshots] = useState<SafetySnapshotMeta[]>([]);
   const [dailyBackups, setDailyBackups] = useState<DailyBackupRecord[]>([]);
+  const [isExportingGdrive, setIsExportingGdrive] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [pendingRecord, setPendingRecord] = useState<DailyBackupRecord | null>(null);
 
   // Load local safety snapshots and daily backups on modal open
   useEffect(() => {
@@ -122,6 +129,28 @@ export const DataManagementModal: React.FC<DataManagementModalProps> = ({
       setErrorMessage(err.message || 'Cloud pull error');
     } finally {
       setIsCloudBusy(false);
+    }
+  };
+
+  const handleExportToGoogleDrive = async () => {
+    if (!currentData) return;
+    setIsExportingGdrive(true);
+    setErrorMessage(null);
+    try {
+      const res = await exportToGoogleDrive(currentData, currentUser);
+      if (res.success) {
+        setDailyBackups(getDailyBackups(currentUser?.id));
+        setSuccessMessage(`✓ Exported to Google Drive successfully! (${res.filename})`);
+      } else if (res.needToken) {
+        setPendingRecord(res.record || null);
+        setIsAuthModalOpen(true);
+      } else {
+        setErrorMessage(res.error || 'Failed to export to Google Drive');
+      }
+    } catch (err: any) {
+      setErrorMessage(err?.message || 'Export error');
+    } finally {
+      setIsExportingGdrive(false);
     }
   };
 
@@ -352,19 +381,31 @@ export const DataManagementModal: React.FC<DataManagementModalProps> = ({
           <div className="grid grid-cols-2 gap-2 mb-3">
             <button
               type="button"
-              onClick={handleInstantDailyExport}
-              className="flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-500/30 text-indigo-300 text-xs font-semibold transition active-press cursor-pointer"
+              onClick={handleExportToGoogleDrive}
+              disabled={isExportingGdrive}
+              className="flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white text-xs font-semibold transition active-press cursor-pointer shadow-sm"
+              title="Export structured JSON directly to Google Drive folder"
             >
-              <Download className="w-3.5 h-3.5" />
-              <span>Export Daily JSON Now</span>
+              {isExportingGdrive ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <span>Exporting to Drive...</span>
+                </>
+              ) : (
+                <>
+                  <CloudUpload className="w-3.5 h-3.5 text-blue-200" />
+                  <span>Export to Google Drive</span>
+                </>
+              )}
             </button>
             <button
               type="button"
-              onClick={openGoogleDriveBackupFolder}
-              className="flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 text-blue-300 text-xs font-semibold transition active-press cursor-pointer"
+              onClick={handleInstantDailyExport}
+              className="flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg bg-[#141a29] hover:bg-[#1c2438] border border-[#232e47] text-slate-300 text-xs font-semibold transition active-press cursor-pointer"
+              title="Download structured daily JSON file directly to device"
             >
-              <ExternalLink className="w-3.5 h-3.5" />
-              <span>Open Google Drive</span>
+              <Download className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Download JSON</span>
             </button>
           </div>
 
@@ -568,6 +609,22 @@ export const DataManagementModal: React.FC<DataManagementModalProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Direct Google Drive Auth & Export Dialog */}
+      {currentData && (
+        <GoogleDriveAuthModal
+          isOpen={isAuthModalOpen}
+          onClose={() => setIsAuthModalOpen(false)}
+          appData={currentData}
+          currentUser={currentUser}
+          pendingRecord={pendingRecord}
+          onExportSuccess={(filename) => {
+            setDailyBackups(getDailyBackups(currentUser?.id));
+            setSuccessMessage(`✓ Exported to Google Drive successfully! (${filename})`);
+            setIsAuthModalOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 };

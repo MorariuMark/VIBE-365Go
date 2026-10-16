@@ -289,6 +289,7 @@ export interface UserSettings {
     gemini?: string;
     nvidia?: string;
     ollamaUrl?: string;
+    googleDriveToken?: string;
   };
 }
 

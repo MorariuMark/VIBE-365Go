@@ -32,8 +32,15 @@ import {
   LogOut,
   ShieldCheck,
   ExternalLink,
+  CloudUpload,
 } from 'lucide-react';
-import { openGoogleDriveBackupFolder, triggerInstantBackupDownload } from '@/lib/dailyBackup';
+import {
+  openGoogleDriveBackupFolder,
+  triggerInstantBackupDownload,
+  exportToGoogleDrive,
+  DailyBackupRecord,
+} from '@/lib/dailyBackup';
+import { GoogleDriveAuthModal } from '@/components/common/GoogleDriveAuthModal';
 
 interface SettingsViewProps {
   appData: AppDataBackup;
@@ -93,11 +100,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [ollamaUrl, setOllamaUrl] = useState(
     currentSettings.customApiKeys?.ollamaUrl || 'http://localhost:11434'
   );
+  const [googleDriveToken, setGoogleDriveTokenState] = useState(
+    currentSettings.customApiKeys?.googleDriveToken || ''
+  );
 
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [vaultClearing, setVaultClearing] = useState(false);
   const [vaultClearedSuccess, setVaultClearedSuccess] = useState(false);
   const [lastAutoSavedAt, setLastAutoSavedAt] = useState<string | null>(null);
+  const [isExportingGdrive, setIsExportingGdrive] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [pendingRecord, setPendingRecord] = useState<DailyBackupRecord | null>(null);
 
   const onUpdateRef = useRef(onUpdateSettings);
   onUpdateRef.current = onUpdateSettings;
@@ -117,6 +130,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     geminiKey,
     nvidiaKey,
     ollamaUrl,
+    googleDriveToken,
   });
   stateRef.current = {
     userName,
@@ -133,6 +147,27 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     geminiKey,
     nvidiaKey,
     ollamaUrl,
+    googleDriveToken,
+  };
+
+  const handleExportToGoogleDrive = async () => {
+    setIsExportingGdrive(true);
+    try {
+      const res = await exportToGoogleDrive(appData, currentUser);
+      if (res.success) {
+        setSavedSuccess(true);
+        setTimeout(() => setSavedSuccess(false), 3000);
+      } else if (res.needToken) {
+        setPendingRecord(res.record || null);
+        setIsAuthModalOpen(true);
+      } else {
+        alert(res.error || 'Failed to export to Google Drive');
+      }
+    } catch (err: any) {
+      alert(err?.message || 'Export error');
+    } finally {
+      setIsExportingGdrive(false);
+    }
   };
 
   const persistSettings = (patch: Partial<UserSettings>) => {
@@ -830,6 +865,52 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   className="w-full px-3 py-2 rounded-xl bg-[#121624] border border-[#20283d] text-xs text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500 font-mono"
                 />
               </div>
+
+              <div className="sm:col-span-2">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[11px] font-mono text-slate-400 flex items-center gap-1.5">
+                    <CloudUpload className="w-3.5 h-3.5 text-blue-400" />
+                    <span>Google Drive Access Token (OAuth Bearer ya29...)</span>
+                  </label>
+                  {googleDriveToken && (
+                    <span className="text-[9px] font-mono text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800/40">
+                      Connected
+                    </span>
+                  )}
+                </div>
+                <input
+                  type="password"
+                  value={googleDriveToken}
+                  onChange={(e) => {
+                    setGoogleDriveTokenState(e.target.value);
+                    debouncedPersist({
+                      customApiKeys: {
+                        groq: groqKey.trim() || undefined,
+                        openrouter: openRouterKey.trim() || undefined,
+                        gemini: geminiKey.trim() || undefined,
+                        nvidia: nvidiaKey.trim() || undefined,
+                        ollamaUrl: ollamaUrl.trim() || undefined,
+                        googleDriveToken: e.target.value.trim() || undefined,
+                      },
+                    });
+                  }}
+                  onBlur={() => {
+                    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+                    persistSettings({
+                      customApiKeys: {
+                        groq: groqKey.trim() || undefined,
+                        openrouter: openRouterKey.trim() || undefined,
+                        gemini: geminiKey.trim() || undefined,
+                        nvidia: nvidiaKey.trim() || undefined,
+                        ollamaUrl: ollamaUrl.trim() || undefined,
+                        googleDriveToken: googleDriveToken.trim() || undefined,
+                      },
+                    });
+                  }}
+                  placeholder="Paste OAuth token to allow direct in-app export to folder 1cU8Oz6IifBX_r3h0adHynWqCpt9u0C12"
+                  className="w-full px-3 py-2 rounded-xl bg-[#121624] border border-[#20283d] text-xs text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 font-mono"
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -938,12 +1019,22 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
               <button
                 type="button"
-                onClick={openGoogleDriveBackupFolder}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-950/60 hover:bg-blue-900/80 text-blue-300 border border-blue-700/60 text-xs font-semibold transition active-press cursor-pointer"
-                title="Open Google Drive Backup Folder in new tab"
+                onClick={handleExportToGoogleDrive}
+                disabled={isExportingGdrive}
+                className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white text-xs font-semibold transition active-press cursor-pointer shadow-sm"
+                title="Export structured JSON directly to Google Drive without switching apps"
               >
-                <ExternalLink className="w-3.5 h-3.5 text-blue-400" />
-                <span>Google Drive</span>
+                {isExportingGdrive ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Exporting to Drive...</span>
+                  </>
+                ) : (
+                  <>
+                    <CloudUpload className="w-3.5 h-3.5 text-blue-200" />
+                    <span>Export to Google Drive</span>
+                  </>
+                )}
               </button>
 
               <label className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#141926] hover:bg-[#1b2234] text-slate-200 border border-[#252f47] text-xs font-semibold transition cursor-pointer">
@@ -1020,6 +1111,20 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </button>
         </div>
       </form>
+
+      {/* Direct Google Drive Auth & Export Dialog */}
+      <GoogleDriveAuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        appData={appData}
+        currentUser={currentUser}
+        pendingRecord={pendingRecord}
+        onExportSuccess={(filename) => {
+          setSavedSuccess(true);
+          setTimeout(() => setSavedSuccess(false), 3000);
+          setIsAuthModalOpen(false);
+        }}
+      />
     </div>
   );
 };

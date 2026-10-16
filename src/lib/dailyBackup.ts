@@ -204,3 +204,183 @@ export function openGoogleDriveBackupFolder(): void {
     window.open(GOOGLE_DRIVE_BACKUP_URL, '_blank', 'noopener,noreferrer');
   }
 }
+
+export const GDRIVE_TOKEN_STORAGE_KEY = 'vibe_gdrive_access_token';
+
+/**
+ * Gets the stored Google Drive access token from localStorage, user settings, or env
+ */
+export function getGoogleDriveToken(
+  user?: UserAccount | null,
+  appData?: AppDataBackup | null
+): string | null {
+  if (typeof window !== 'undefined') {
+    const local = localStorage.getItem(GDRIVE_TOKEN_STORAGE_KEY);
+    if (local && local.trim()) return local.trim();
+  }
+  if (appData?.settings?.customApiKeys?.googleDriveToken) {
+    return appData.settings.customApiKeys.googleDriveToken.trim();
+  }
+  if (process.env.NEXT_PUBLIC_GOOGLE_DRIVE_TOKEN) {
+    return process.env.NEXT_PUBLIC_GOOGLE_DRIVE_TOKEN.trim();
+  }
+  return null;
+}
+
+/**
+ * Persists the Google Drive access token in localStorage
+ */
+export function setGoogleDriveToken(token: string): void {
+  if (typeof window !== 'undefined') {
+    if (!token || !token.trim()) {
+      localStorage.removeItem(GDRIVE_TOKEN_STORAGE_KEY);
+    } else {
+      localStorage.setItem(GDRIVE_TOKEN_STORAGE_KEY, token.trim());
+    }
+  }
+}
+
+/**
+ * Removes the stored Google Drive token
+ */
+export function clearGoogleDriveToken(): void {
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem(GDRIVE_TOKEN_STORAGE_KEY);
+  }
+}
+
+export interface GoogleDriveExportResult {
+  success: boolean;
+  fileId?: string;
+  filename?: string;
+  error?: string;
+  needToken?: boolean;
+  record?: DailyBackupRecord;
+}
+
+/**
+ * Exports the structured application JSON directly to Google Drive without switching apps.
+ * If multiple backups happen in one day, all are saved and the latest is tagged as reference.
+ * Also redundantly archives the snapshot in Supabase Cloud Vault.
+ */
+export async function exportToGoogleDrive(
+  data: AppDataBackup,
+  user?: UserAccount | null,
+  providedToken?: string
+): Promise<GoogleDriveExportResult> {
+  const record = recordDailyBackup(data, user);
+
+  // Redundant asynchronous cloud vault archival to Supabase
+  try {
+    const { supabase } = await import('./supabaseClient');
+    const isMark = !user || user.id === 'user_mark' || user.username.toLowerCase() === 'mark';
+    const backupId = `daily_backup_${isMark ? 'mark' : user.id}_${record.dateISO}`;
+    await supabase.from('vibe_app_state').upsert(
+      {
+        id: backupId,
+        payload: record.payload,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'id' }
+    );
+  } catch (cloudErr) {
+    console.warn('[DailyBackup] Supabase cloud vault sync notice:', cloudErr);
+  }
+
+  const token = (providedToken || getGoogleDriveToken(user, data) || '').trim();
+
+  if (!token) {
+    return {
+      success: false,
+      needToken: true,
+      record,
+      error: 'Google Drive authorization token required to upload directly.',
+    };
+  }
+
+  try {
+    const res = await fetch('/api/backup/gdrive', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        filename: record.filename,
+        payload: record.payload,
+        accessToken: token,
+        folderId: '1cU8Oz6IifBX_r3h0adHynWqCpt9u0C12',
+      }),
+    });
+
+    const result = await res.json();
+
+    if (!res.ok || !result.success) {
+      if (
+        res.status === 401 ||
+        result.error === 'NO_TOKEN' ||
+        result.details?.error?.status === 'UNAUTHENTICATED'
+      ) {
+        clearGoogleDriveToken();
+        return {
+          success: false,
+          needToken: true,
+          record,
+          error: result.error || 'Google Drive token expired or unauthenticated.',
+        };
+      }
+      return {
+        success: false,
+        record,
+        error: result.error || 'Failed to upload to Google Drive',
+      };
+    }
+
+    // Save token if valid
+    if (providedToken) {
+      setGoogleDriveToken(providedToken);
+    }
+
+    if (typeof window !== 'undefined') {
+      const today = getTodayISO();
+      localStorage.setItem(`vibe_last_daily_backup_date_${user?.id || 'mark'}`, today);
+    }
+
+    return {
+      success: true,
+      fileId: result.fileId,
+      filename: record.filename,
+      record,
+    };
+  } catch (netErr: any) {
+    return {
+      success: false,
+      record,
+      error: netErr?.message || 'Network error connecting to Google Drive API',
+    };
+  }
+}
+
+/**
+ * Triggers native system share sheet (iOS/Android/Desktop)
+ * On iPhone, this allows direct export into Google Drive without leaving the app.
+ */
+export async function shareBackupNative(record: DailyBackupRecord): Promise<boolean> {
+  if (typeof window === 'undefined' || !navigator.share) return false;
+  try {
+    const jsonStr = JSON.stringify(record.payload, null, 2);
+    const file = new File([jsonStr], record.filename, { type: 'application/json' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({
+        files: [file],
+        title: 'VIBE 365 Daily Backup',
+        text: `VIBE 365 Backup for ${record.username} (${record.dateISO})`,
+      });
+      return true;
+    }
+  } catch (err: any) {
+    if (err.name !== 'AbortError') {
+      console.warn('[DailyBackup] Native share failed:', err);
+    }
+  }
+  return false;
+}

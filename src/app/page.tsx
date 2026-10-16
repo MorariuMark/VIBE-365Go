@@ -86,6 +86,7 @@ import {
   Download,
   ExternalLink,
   X,
+  CloudUpload,
 } from 'lucide-react';
 import { AIChatView } from '@/components/chat/AIChatView';
 import {
@@ -102,7 +103,10 @@ import {
   triggerInstantBackupDownload,
   openGoogleDriveBackupFolder,
   recordDailyBackup,
+  exportToGoogleDrive,
+  DailyBackupRecord,
 } from '@/lib/dailyBackup';
+import { GoogleDriveAuthModal } from '@/components/common/GoogleDriveAuthModal';
 
 type ActiveTab = 'habits' | 'fitness' | 'breakers' | 'objectives' | 'tasks' | 'sleep' | 'chat' | 'settings';
 type FitnessSubTab = 'calendar' | 'matrix' | 'curves' | 'photos';
@@ -123,9 +127,18 @@ export default function Home() {
   const [isTrashModalOpen, setIsTrashModalOpen] = useState(false);
   const [isActionLogModalOpen, setIsActionLogModalOpen] = useState(false);
 
-  // Daily Google Drive Backup Reminder State
+  // Daily Google Drive Backup State
   const [backupReminderDismissed, setBackupReminderDismissed] = useState<boolean>(false);
   const [dailyBackupStatus, setDailyBackupStatus] = useState<{ backedUpToday: boolean; lastBackupDate?: string } | null>(null);
+  const [isGdriveModalOpen, setIsGdriveModalOpen] = useState<boolean>(false);
+  const [isExportingGdrive, setIsExportingGdrive] = useState<boolean>(false);
+  const [pendingBackupRecord, setPendingBackupRecord] = useState<DailyBackupRecord | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showActionToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
 
   // Check auth session on startup, then load user-scoped local and cloud data
   useEffect(() => {
@@ -952,11 +965,34 @@ export default function Home() {
     });
   };
 
-  // Instant Daily Google Drive Backup Handler
+  // Instant Daily File Backup Handler
   const handleInstantDailyBackup = () => {
     if (!data) return;
     const record = triggerInstantBackupDownload(data, session?.user);
     setDailyBackupStatus({ backedUpToday: true, lastBackupDate: record.dateISO });
+    showActionToast(`Downloaded backup: ${record.filename}`);
+  };
+
+  // Direct In-App Google Drive Export Handler (without switching apps)
+  const handleExportToGoogleDrive = async (customToken?: string) => {
+    if (!data) return;
+    setIsExportingGdrive(true);
+    try {
+      const res = await exportToGoogleDrive(data, session?.user, customToken);
+      if (res.success) {
+        setDailyBackupStatus({ backedUpToday: true, lastBackupDate: res.record?.dateISO });
+        showActionToast(`✓ Exported to Google Drive successfully! (${res.filename})`);
+      } else if (res.needToken) {
+        setPendingBackupRecord(res.record || null);
+        setIsGdriveModalOpen(true);
+      } else {
+        showActionToast(`Google Drive: ${res.error || 'Export failed'}`);
+      }
+    } catch (err: any) {
+      showActionToast(`Export error: ${err?.message || 'Connection error'}`);
+    } finally {
+      setIsExportingGdrive(false);
+    }
   };
 
   // Fitness Photo Metadata Handlers (<1MB Optimized)
@@ -1413,20 +1449,31 @@ export default function Home() {
             <div className="flex items-center gap-2 self-stretch sm:self-auto justify-end">
               <button
                 type="button"
-                onClick={handleInstantDailyBackup}
-                className="px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-[11px] flex items-center gap-1.5 transition active-press shadow-sm cursor-pointer"
+                onClick={() => handleExportToGoogleDrive()}
+                disabled={isExportingGdrive}
+                className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white font-semibold text-xs flex items-center gap-1.5 transition active-press shadow-md cursor-pointer"
+                title="Generate JSON and export directly to Google Drive folder without switching apps"
               >
-                <Download className="w-3.5 h-3.5" />
-                <span>Export JSON Now</span>
+                {isExportingGdrive ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Exporting to Drive...</span>
+                  </>
+                ) : (
+                  <>
+                    <CloudUpload className="w-3.5 h-3.5 text-blue-200" />
+                    <span>Export to Google Drive</span>
+                  </>
+                )}
               </button>
               <button
                 type="button"
-                onClick={openGoogleDriveBackupFolder}
-                className="px-2.5 py-1.5 rounded-lg bg-blue-950/70 hover:bg-blue-900/80 text-blue-300 border border-blue-700/50 font-semibold text-[11px] flex items-center gap-1.5 transition active-press cursor-pointer"
-                title="Open Google Drive folder in new tab"
+                onClick={handleInstantDailyBackup}
+                className="px-2.5 py-1.5 rounded-lg bg-[#141926] hover:bg-[#1b2234] text-slate-300 border border-[#252f47] font-semibold text-[11px] flex items-center gap-1.5 transition active-press cursor-pointer"
+                title="Download JSON backup file to device"
               >
-                <ExternalLink className="w-3.5 h-3.5" />
-                <span>Open Google Drive</span>
+                <Download className="w-3.5 h-3.5" />
+                <span>Download JSON</span>
               </button>
               <button
                 type="button"
@@ -1820,6 +1867,29 @@ export default function Home() {
           syncStatus={syncStatus}
           lastSynced={lastSynced}
         />
+      )}
+
+      {/* Google Drive Authorization & Direct Export Modal */}
+      {data && (
+        <GoogleDriveAuthModal
+          isOpen={isGdriveModalOpen}
+          onClose={() => setIsGdriveModalOpen(false)}
+          appData={data}
+          currentUser={session?.user}
+          pendingRecord={pendingBackupRecord}
+          onExportSuccess={(filename) => {
+            showActionToast(`✓ Exported to Google Drive: ${filename}`);
+            setDailyBackupStatus({ backedUpToday: true, lastBackupDate: getTodayISO() });
+          }}
+        />
+      )}
+
+      {/* Action / Backup Toast Notification */}
+      {toastMessage && (
+        <div className="fixed top-4 right-4 z-50 flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-slate-900/95 border border-slate-700/80 text-white text-xs shadow-2xl backdrop-blur-md animate-fade-in pointer-events-none">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+          <span className="font-medium">{toastMessage}</span>
+        </div>
       )}
 
       {/* Mobile Floating Bottom Dock (Strictly 6 Core Sections with Safe-Area insets) */}
