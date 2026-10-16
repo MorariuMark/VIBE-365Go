@@ -42,17 +42,26 @@ export function getStoredData(userId?: string): AppDataBackup {
   try {
     const key = getUserStorageKey(userId);
     let raw = localStorage.getItem(key);
+    const isMark = !userId || userId === 'user_mark' || userId === 'mark';
 
-    // If no data exists under this user key yet:
-    if (!raw) {
-      // If this is Mark, check if legacy primary data exists to seamlessly migrate it
-      const isMark = userId === 'user_mark' || userId === 'mark';
-      if (isMark) {
-        const legacyRaw = localStorage.getItem(DEFAULT_STORAGE_KEY);
-        if (legacyRaw) {
-          raw = legacyRaw;
-          localStorage.setItem(key, legacyRaw);
+    // If Mark, check if legacy primary storage exists and merge them to guarantee no lost workouts
+    if (isMark) {
+      const legacyRaw = localStorage.getItem(DEFAULT_STORAGE_KEY);
+      if (raw && legacyRaw && raw !== legacyRaw) {
+        try {
+          const parsedUser = JSON.parse(raw);
+          const parsedLegacy = JSON.parse(legacyRaw);
+          const merged = mergeAppData(normalizeAppData(parsedLegacy), normalizeAppData(parsedUser));
+          const serialized = JSON.stringify(merged);
+          localStorage.setItem(key, serialized);
+          localStorage.setItem(DEFAULT_STORAGE_KEY, serialized);
+          return merged;
+        } catch (e) {
+          console.warn('Error merging legacy and user storage for Mark', e);
         }
+      } else if (!raw && legacyRaw) {
+        raw = legacyRaw;
+        localStorage.setItem(key, legacyRaw);
       }
     }
 
@@ -199,6 +208,269 @@ export function normalizeAppData(raw: any): AppDataBackup {
             },
           }
         : INITIAL_SETTINGS,
+  };
+}
+
+function mergeLoggedExercises(ex1: LoggedExercise[], ex2: LoggedExercise[]): LoggedExercise[] {
+  const map = new Map<string, LoggedExercise>();
+  for (const e of ex1 || []) {
+    const key = (e.exerciseName || e.exerciseId || e.id || '').toLowerCase().trim();
+    if (key) map.set(key, e);
+  }
+  for (const e of ex2 || []) {
+    const key = (e.exerciseName || e.exerciseId || e.id || '').toLowerCase().trim();
+    if (!key) continue;
+    if (map.has(key)) {
+      const existing = map.get(key)!;
+      const eSets = e.sets || [];
+      const exSets = existing.sets || [];
+      if (eSets.length >= exSets.length) {
+        map.set(key, { ...existing, ...e });
+      }
+    } else {
+      map.set(key, e);
+    }
+  }
+  return Array.from(map.values());
+}
+
+/**
+ * Deep merges two AppDataBackup states to ensure no workouts, habits,
+ * sleep logs, photos, objectives, or settings are ever lost.
+ * 
+ * Order of precedence: `incoming` takes priority for updated fields,
+ * but all entities from `base` are preserved unless explicitly moved to trash.
+ */
+export function mergeAppData(base: AppDataBackup, incoming: AppDataBackup): AppDataBackup {
+  if (!base && !incoming) return getFullDefaultBackup();
+  if (!base) return normalizeAppData(incoming);
+  if (!incoming) return normalizeAppData(base);
+
+  // 1. Merge Workouts
+  const trashWorkoutKeys = new Set(
+    [...(incoming.trash || []), ...(base.trash || [])]
+      .filter((t) => t.itemType === 'workout')
+      .map((t) => t.originalId)
+  );
+
+  const mergedWorkoutLogs: Record<string, WorkoutDayLog> = {};
+  const allWorkoutDates = Array.from(
+    new Set([...Object.keys(base.workoutLogs || {}), ...Object.keys(incoming.workoutLogs || {})])
+  );
+
+  for (const date of allWorkoutDates) {
+    const wBase = base.workoutLogs?.[date];
+    const wInc = incoming.workoutLogs?.[date];
+
+    if (wBase && !wInc) {
+      if (!trashWorkoutKeys.has(date) && !trashWorkoutKeys.has(wBase.id)) {
+        mergedWorkoutLogs[date] = wBase;
+      }
+    } else if (!wBase && wInc) {
+      if (!trashWorkoutKeys.has(date) && !trashWorkoutKeys.has(wInc.id)) {
+        mergedWorkoutLogs[date] = wInc;
+      }
+    } else if (wBase && wInc) {
+      // Both exist: merge exercises and combine muscle groups/photos
+      const mergedExercises = mergeLoggedExercises(wBase.exercises || [], wInc.exercises || []);
+      const mergedMuscleGroups = Array.from(
+        new Set([...(wBase.muscleGroups || []), ...(wInc.muscleGroups || [])])
+      );
+      const mergedPhotoIds = Array.from(
+        new Set([...(wBase.photoIds || []), ...(wInc.photoIds || [])])
+      );
+
+      mergedWorkoutLogs[date] = {
+        ...wBase,
+        ...wInc,
+        title: wInc.title || wBase.title || 'Workout',
+        completed: wInc.completed || wBase.completed,
+        notes: wInc.notes || wBase.notes,
+        durationMinutes: wInc.durationMinutes || wBase.durationMinutes,
+        bodyWeightKg: wInc.bodyWeightKg || wBase.bodyWeightKg,
+        splitType: wInc.splitType || wBase.splitType || 'custom',
+        muscleGroups: mergedMuscleGroups,
+        exercises: mergedExercises,
+        photoIds: mergedPhotoIds,
+      };
+    }
+  }
+
+  // 2. Merge Habits
+  const trashHabitIds = new Set(
+    [...(incoming.trash || []), ...(base.trash || [])]
+      .filter((t) => t.itemType === 'habit')
+      .map((t) => t.originalId)
+  );
+
+  const habitMap = new Map<string, Habit>();
+  for (const h of base.habits || []) {
+    if (!trashHabitIds.has(h.id)) {
+      habitMap.set(h.id, h);
+    }
+  }
+
+  for (const h of incoming.habits || []) {
+    if (trashHabitIds.has(h.id)) {
+      habitMap.delete(h.id);
+      continue;
+    }
+    if (habitMap.has(h.id)) {
+      const existing = habitMap.get(h.id)!;
+      habitMap.set(h.id, {
+        ...existing,
+        ...h,
+        history: { ...(existing.history || {}), ...(h.history || {}) },
+        streak: Math.max(existing.streak || 0, h.streak || 0),
+        bestStreak: Math.max(existing.bestStreak || 0, h.bestStreak || 0),
+        dailyMetricValues: { ...(existing.dailyMetricValues || {}), ...(h.dailyMetricValues || {}) },
+        dailyNotes: { ...(existing.dailyNotes || {}), ...(h.dailyNotes || {}) },
+        dailyRatings: { ...(existing.dailyRatings || {}), ...(h.dailyRatings || {}) },
+        generalNotes: h.generalNotes || existing.generalNotes,
+      });
+    } else {
+      habitMap.set(h.id, h);
+    }
+  }
+
+  // 3. Merge Sleep Logs
+  const mergedSleepLogs: Record<string, SleepLog> = { ...(base.sleepLogs || {}) };
+  for (const [dateISO, incSleep] of Object.entries(incoming.sleepLogs || {})) {
+    if (!mergedSleepLogs[dateISO]) {
+      mergedSleepLogs[dateISO] = incSleep;
+    } else {
+      const baseSleep = mergedSleepLogs[dateISO];
+      const preferInc =
+        (incSleep.notes && !baseSleep.notes) ||
+        (incSleep.qualityScore || 0) > (baseSleep.qualityScore || 0) ||
+        (incSleep.durationMinutesTotal || 0) > (baseSleep.durationMinutesTotal || 0);
+      mergedSleepLogs[dateISO] = preferInc
+        ? { ...baseSleep, ...incSleep }
+        : { ...incSleep, ...baseSleep };
+    }
+  }
+
+  // 4. Merge Fitness Photos
+  const mergedPhotos: Record<string, PhotoMetadata[]> = { ...(base.fitnessPhotos || {}) };
+  for (const [dateISO, photos] of Object.entries(incoming.fitnessPhotos || {})) {
+    if (!mergedPhotos[dateISO]) {
+      mergedPhotos[dateISO] = photos;
+    } else {
+      const existingIds = new Set(mergedPhotos[dateISO].map((p) => p.id));
+      const added = (photos || []).filter((p) => !existingIds.has(p.id));
+      mergedPhotos[dateISO] = [...mergedPhotos[dateISO], ...added];
+    }
+  }
+
+  // 5. Merge Objectives
+  const objMap = new Map<string, Objective>();
+  for (const o of base.objectives || []) objMap.set(o.id, o);
+  for (const o of incoming.objectives || []) {
+    if (objMap.has(o.id)) {
+      const existing = objMap.get(o.id)!;
+      objMap.set(o.id, {
+        ...existing,
+        ...o,
+        progress: Math.max(existing.progress || 0, o.progress || 0),
+        completed: existing.completed || o.completed,
+      });
+    } else {
+      objMap.set(o.id, o);
+    }
+  }
+
+  // 6. Merge Tasks and Completed Tasks
+  const taskMap = new Map<string, TaskItem>();
+  for (const t of base.tasks || []) taskMap.set(t.id, t);
+  for (const t of incoming.tasks || []) taskMap.set(t.id, t);
+
+  const compTaskMap = new Map<string, TaskItem>();
+  for (const t of base.completedTasks || []) compTaskMap.set(t.id, t);
+  for (const t of incoming.completedTasks || []) compTaskMap.set(t.id, t);
+
+  compTaskMap.forEach((_, completedId) => {
+    taskMap.delete(completedId);
+  });
+
+  // 7. Merge Habit Breakers
+  const breakerMap = new Map<string, HabitBreaker>();
+  for (const b of base.habitBreakers || []) breakerMap.set(b.id, b);
+  for (const b of incoming.habitBreakers || []) {
+    if (breakerMap.has(b.id)) {
+      const ex = breakerMap.get(b.id)!;
+      breakerMap.set(b.id, {
+        ...ex,
+        ...b,
+        logs: { ...(ex.logs || {}), ...(b.logs || {}) },
+      });
+    } else {
+      breakerMap.set(b.id, b);
+    }
+  }
+
+  // 8. Merge Trash and Action Logs
+  const trashMap = new Map<string, TrashItem>();
+  for (const t of base.trash || []) trashMap.set(t.id, t);
+  for (const t of incoming.trash || []) trashMap.set(t.id, t);
+
+  const actionLogMap = new Map<string, ActionLog>();
+  for (const a of base.actionLogs || []) actionLogMap.set(a.id, a);
+  for (const a of incoming.actionLogs || []) actionLogMap.set(a.id, a);
+  const sortedActions = Array.from(actionLogMap.values())
+    .sort((x, y) => new Date(y.timestamp).getTime() - new Date(x.timestamp).getTime())
+    .slice(0, 1000);
+
+  // 9. Merge Muscle Groups
+  const mgMap = new Map<string, MuscleGroup>();
+  for (const mg of INITIAL_MUSCLE_GROUPS) mgMap.set(mg.id, mg);
+  for (const mg of base.muscleGroups || []) {
+    if (mgMap.has(mg.id)) {
+      const standard = mgMap.get(mg.id)!;
+      const exMap = new Map(standard.exercises.map((e) => [e.id, e]));
+      for (const e of mg.exercises || []) exMap.set(e.id, e);
+      mgMap.set(mg.id, { ...standard, ...mg, exercises: Array.from(exMap.values()) });
+    } else {
+      mgMap.set(mg.id, mg);
+    }
+  }
+  for (const mg of incoming.muscleGroups || []) {
+    if (mgMap.has(mg.id)) {
+      const standard = mgMap.get(mg.id)!;
+      const exMap = new Map(standard.exercises.map((e) => [e.id, e]));
+      for (const e of mg.exercises || []) exMap.set(e.id, e);
+      mgMap.set(mg.id, { ...standard, ...mg, exercises: Array.from(exMap.values()) });
+    } else {
+      mgMap.set(mg.id, mg);
+    }
+  }
+
+  return {
+    version: '2.0.0',
+    exportedAt: new Date().toISOString(),
+    habits: Array.from(habitMap.values()),
+    objectives: Array.from(objMap.values()),
+    workoutLogs: mergedWorkoutLogs,
+    muscleGroups: Array.from(mgMap.values()),
+    gymProfile: {
+      ...(base.gymProfile || INITIAL_GYM_PROFILE),
+      ...(incoming.gymProfile || {}),
+    },
+    trash: Array.from(trashMap.values()),
+    habitBreakers: Array.from(breakerMap.values()),
+    actionLogs: sortedActions,
+    tasks: Array.from(taskMap.values()),
+    completedTasks: Array.from(compTaskMap.values()),
+    sleepLogs: mergedSleepLogs,
+    fitnessPhotos: mergedPhotos,
+    settings: {
+      ...INITIAL_SETTINGS,
+      ...(base.settings || {}),
+      ...(incoming.settings || {}),
+      customApiKeys: {
+        ...(base.settings?.customApiKeys || {}),
+        ...(incoming.settings?.customApiKeys || {}),
+      },
+    },
   };
 }
 

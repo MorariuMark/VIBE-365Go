@@ -1,6 +1,6 @@
 import { AppDataBackup, UserAccount } from '@/types';
 import { supabase } from './supabaseClient';
-import { getStoredData, saveStoredData, normalizeAppData } from './storage';
+import { getStoredData, saveStoredData, normalizeAppData, mergeAppData } from './storage';
 
 export type CloudSyncStatus = 'idle' | 'syncing' | 'synced' | 'offline' | 'error';
 
@@ -39,8 +39,8 @@ export function getCloudStateId(user?: UserAccount | null): string {
 
 /**
  * Loads the application state from Supabase cloud database for the specific user.
- * If Mark, ensures existing primary state data is preserved and loaded.
- * For new users, retrieves their isolated state.
+ * If Mark, ensures both legacy primary state and mark state are merged seamlessly,
+ * and merged with any local device data so no workouts, habits, or sleep logs are ever lost.
  */
 export async function loadCloudData(user?: UserAccount | null): Promise<AppDataBackup | null> {
   if (typeof window === 'undefined') return null;
@@ -51,51 +51,62 @@ export async function loadCloudData(user?: UserAccount | null): Promise<AppDataB
     const stateId = getCloudStateId(user);
     const isMark = !user || user.id === 'user_mark' || user.username.toLowerCase() === 'mark';
 
-    // 1. Fetch user-specific cloud state
-    const { data, error } = await supabase
-      .from('vibe_app_state')
-      .select('payload, updated_at')
-      .eq('id', stateId)
-      .maybeSingle();
+    let cloudPayload: AppDataBackup | null = null;
 
-    if (error) {
-      console.warn('[CloudSync] Could not fetch cloud state:', error.message);
-      notifyListeners('offline', error.message);
-      return null;
-    }
-
-    if (data && data.payload) {
-      const cloudPayload = normalizeAppData(data.payload);
-      saveStoredData(cloudPayload, user?.id);
-      notifyListeners('synced');
-      return cloudPayload;
-    }
-
-    // 2. If Mark and no user_state_mark exists yet, load from legacy primary_user_state
     if (isMark) {
-      const { data: legacyData } = await supabase
+      // 1. For Mark, query BOTH user_state_mark and primary_user_state to guarantee all past workouts are included
+      const [markRes, primaryRes] = await Promise.all([
+        supabase.from('vibe_app_state').select('payload, updated_at').eq('id', 'user_state_mark').maybeSingle(),
+        supabase.from('vibe_app_state').select('payload, updated_at').eq('id', 'primary_user_state').maybeSingle(),
+      ]);
+
+      const markData = markRes.data?.payload ? normalizeAppData(markRes.data.payload) : null;
+      const primaryData = primaryRes.data?.payload ? normalizeAppData(primaryRes.data.payload) : null;
+
+      if (markData && primaryData) {
+        cloudPayload = mergeAppData(primaryData, markData);
+      } else {
+        cloudPayload = markData || primaryData;
+      }
+    } else {
+      // For other accounts, retrieve their isolated cloud slot
+      const { data, error } = await supabase
         .from('vibe_app_state')
         .select('payload, updated_at')
-        .eq('id', 'primary_user_state')
+        .eq('id', stateId)
         .maybeSingle();
 
-      if (legacyData && legacyData.payload) {
-        const cloudPayload = normalizeAppData(legacyData.payload);
-        // Save to Mark's isolated cloud slot and local storage
-        saveStoredData(cloudPayload, user?.id);
-        await saveCloudDataImmediate(cloudPayload, user);
-        notifyListeners('synced');
-        return cloudPayload;
+      if (error) {
+        console.warn('[CloudSync] Could not fetch cloud state:', error.message);
+        notifyListeners('offline', error.message);
+        return null;
+      }
+
+      if (data && data.payload) {
+        cloudPayload = normalizeAppData(data.payload);
       }
     }
 
-    // 3. No cloud row yet; initialize cloud with user's local data
+    // 2. Merge cloud data with device local storage so offline/local workouts are retained
     const local = getStoredData(user?.id);
-    if (local) {
-      await saveCloudDataImmediate(local, user);
+    let finalPayload: AppDataBackup;
+
+    if (cloudPayload && local) {
+      finalPayload = mergeAppData(local, cloudPayload);
+    } else if (cloudPayload) {
+      finalPayload = cloudPayload;
+    } else {
+      finalPayload = local;
     }
+
+    // Save final merged state to local storage
+    saveStoredData(finalPayload, user?.id);
+
+    // Sync merged state back to cloud so both slots are up-to-date
+    await saveCloudDataImmediate(finalPayload, user);
+
     notifyListeners('synced');
-    return null;
+    return finalPayload;
   } catch (err: any) {
     console.warn('[CloudSync] Network error fetching cloud data:', err);
     notifyListeners('offline', err?.message);
@@ -116,10 +127,30 @@ export async function saveCloudDataImmediate(
     const stateId = getCloudStateId(user);
     const isMark = !user || user.id === 'user_mark' || user.username.toLowerCase() === 'mark';
 
+    let payloadToSave = data;
+
+    // Safety guard: if attempting to save with 0 workouts for Mark, ensure we don't wipe out valid cloud workouts
+    if (isMark && Object.keys(data.workoutLogs || {}).length === 0) {
+      try {
+        const { data: cloudCurrent } = await supabase
+          .from('vibe_app_state')
+          .select('payload')
+          .eq('id', 'user_state_mark')
+          .maybeSingle();
+
+        if (cloudCurrent?.payload?.workoutLogs && Object.keys(cloudCurrent.payload.workoutLogs).length > 0) {
+          console.warn('[CloudSync] Protected workoutLogs from accidental empty overwrite');
+          payloadToSave = mergeAppData(normalizeAppData(cloudCurrent.payload), data);
+        }
+      } catch (checkErr) {
+        console.warn('[CloudSync] Workout guard check failed', checkErr);
+      }
+    }
+
     const { error } = await supabase.from('vibe_app_state').upsert(
       {
         id: stateId,
-        payload: data,
+        payload: payloadToSave,
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'id' }
@@ -137,7 +168,7 @@ export async function saveCloudDataImmediate(
         await supabase.from('vibe_app_state').upsert(
           {
             id: 'primary_user_state',
-            payload: data,
+            payload: payloadToSave,
             updated_at: new Date().toISOString(),
           },
           { onConflict: 'id' }
