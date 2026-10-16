@@ -39,7 +39,6 @@ import {
   updateUserSettings,
 } from '@/lib/storage';
 import { getTodayISO, formatDatePretty, formatSleepDisplay } from '@/lib/utils';
-import { saveCloudDataImmediate } from '@/lib/cloudSync';
 import { getCurrentSession, logout } from '@/lib/auth';
 import { AuthView } from '@/components/auth/AuthView';
 import { ContributionGrid } from '@/components/habits/ContributionGrid';
@@ -83,13 +82,17 @@ import {
   CloudOff,
   RefreshCw,
   LogOut,
+  AlertTriangle,
 } from 'lucide-react';
 import { AIChatView } from '@/components/chat/AIChatView';
 import {
   CloudSyncStatus,
   loadCloudData,
   queueCloudSync,
+  syncCloudImmediate,
+  saveCloudDataImmediate,
   subscribeSyncStatus,
+  flushPendingOfflineSync,
 } from '@/lib/cloudSync';
 
 type ActiveTab = 'habits' | 'fitness' | 'breakers' | 'objectives' | 'tasks' | 'sleep' | 'chat' | 'settings';
@@ -133,6 +136,9 @@ export default function Home() {
       }
     });
 
+    // Flush any pending offline queue if reconnected
+    flushPendingOfflineSync();
+
     // Subscribe to cloud sync status
     const unsubscribe = subscribeSyncStatus((status, time) => {
       setSyncStatus(status);
@@ -142,13 +148,20 @@ export default function Home() {
     return () => unsubscribe();
   }, []);
 
-  // Save to user-scoped local storage on mutation and debounced sync to Supabase
-  const updateData = (updater: (prev: AppDataBackup) => AppDataBackup) => {
+  // Save to user-scoped local storage on mutation and trigger immediate zero-delay Supabase sync
+  const updateData = (
+    updater: (prev: AppDataBackup) => AppDataBackup,
+    options?: { immediate?: boolean; delayMs?: number }
+  ) => {
     setData((prev) => {
       if (!prev) return prev;
       const next = updater(prev);
       saveStoredData(next, session?.user?.id);
-      queueCloudSync(next, session?.user);
+      if (options?.immediate ?? true) {
+        syncCloudImmediate(next, session?.user);
+      } else {
+        queueCloudSync(next, session?.user, options?.delayMs ?? 200);
+      }
       return next;
     });
   };
@@ -168,6 +181,7 @@ export default function Home() {
           setData(cloudState);
         }
       });
+      flushPendingOfflineSync();
     }
 
     subscribeSyncStatus((status, time) => {
@@ -1235,23 +1249,33 @@ export default function Home() {
             {/* Supabase Cloud Sync Status Button */}
             <button
               type="button"
-              onClick={() => setIsDataModalOpen(true)}
-              className={`flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-lg border text-xs font-medium transition ${
+              onClick={() => {
+                if ((syncStatus === 'offline' || syncStatus === 'error') && data && session?.user) {
+                  syncCloudImmediate(data, session.user);
+                } else {
+                  setIsDataModalOpen(true);
+                }
+              }}
+              className={`flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-lg border text-xs font-medium transition active-press ${
                 syncStatus === 'synced'
-                  ? 'bg-emerald-950/20 text-emerald-300 border-emerald-800/40 hover:bg-emerald-900/30'
+                  ? 'bg-emerald-950/30 text-emerald-300 border-emerald-700/50 hover:bg-emerald-900/40'
                   : syncStatus === 'syncing'
-                  ? 'bg-amber-950/20 text-amber-300 border-amber-800/40 hover:bg-amber-900/30'
+                  ? 'bg-amber-950/30 text-amber-300 border-amber-700/50 hover:bg-amber-900/40'
                   : syncStatus === 'offline'
-                  ? 'bg-slate-900/60 text-slate-400 border-slate-700/50 hover:bg-slate-800/50'
+                  ? 'bg-amber-950/40 text-amber-200 border-amber-600/50 hover:bg-amber-900/50 animate-pulse'
+                  : syncStatus === 'error'
+                  ? 'bg-rose-950/40 text-rose-200 border-rose-600/50 hover:bg-rose-900/50 animate-pulse'
                   : 'bg-[#0d1017] hover:bg-[#141924] text-slate-300 border-[#1c2234]'
               }`}
               title={
                 syncStatus === 'synced'
-                  ? `Cloud Synced${lastSynced ? ` at ${lastSynced.toLocaleTimeString()}` : ''}`
+                  ? `Cloud Synced${lastSynced ? ` at ${lastSynced.toLocaleTimeString()}` : ''} (Click to open Data & Safety Snapshots)`
                   : syncStatus === 'syncing'
-                  ? 'Syncing changes to Supabase cloud...'
+                  ? 'Syncing changes to Supabase cloud immediately...'
                   : syncStatus === 'offline'
-                  ? 'Offline / Local cache mode'
+                  ? 'Offline / Pending Sync (Tap to retry sync now)'
+                  : syncStatus === 'error'
+                  ? 'Sync error occurred (Tap to retry sync now)'
                   : 'Supabase Cloud Sync & Backup'
               }
             >
@@ -1259,11 +1283,23 @@ export default function Home() {
                 <RefreshCw className="w-3.5 h-3.5 text-amber-400 animate-spin" />
               ) : syncStatus === 'synced' ? (
                 <Cloud className="w-3.5 h-3.5 text-emerald-400" />
+              ) : syncStatus === 'offline' ? (
+                <CloudOff className="w-3.5 h-3.5 text-amber-400" />
+              ) : syncStatus === 'error' ? (
+                <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
               ) : (
                 <CloudOff className="w-3.5 h-3.5 text-slate-400" />
               )}
-              <span className="hidden sm:inline font-mono">
-                {syncStatus === 'synced' ? 'Synced' : syncStatus === 'syncing' ? 'Syncing' : 'Cloud'}
+              <span className="font-mono text-[11px] sm:text-xs font-semibold">
+                {syncStatus === 'synced'
+                  ? 'Synced'
+                  : syncStatus === 'syncing'
+                  ? 'Syncing'
+                  : syncStatus === 'offline'
+                  ? 'Offline (Retry)'
+                  : syncStatus === 'error'
+                  ? 'Retry'
+                  : 'Cloud'}
               </span>
             </button>
 

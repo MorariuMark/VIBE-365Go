@@ -1,9 +1,17 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { AppDataBackup, UserAccount } from '@/types';
-import { exportDataAsJSON, importDataFromJSON, saveStoredData, resetAllDataToFresh } from '@/lib/storage';
-import { getFullDefaultBackup, getMockSampleBackup } from '@/lib/initialData';
+import {
+  exportDataAsJSON,
+  importDataFromJSON,
+  saveStoredData,
+  resetAllDataToFresh,
+  getSafetySnapshots,
+  restoreSafetySnapshot,
+  SafetySnapshotMeta,
+} from '@/lib/storage';
+import { getMockSampleBackup } from '@/lib/initialData';
 import {
   Download,
   Upload,
@@ -16,8 +24,15 @@ import {
   CloudOff,
   RefreshCw,
   Trash2,
+  ShieldCheck,
+  History,
 } from 'lucide-react';
-import { CloudSyncStatus, saveCloudDataImmediate, loadCloudData } from '@/lib/cloudSync';
+import {
+  CloudSyncStatus,
+  syncCloudImmediate,
+  loadCloudData,
+  flushPendingOfflineSync,
+} from '@/lib/cloudSync';
 
 interface DataManagementModalProps {
   onClose: () => void;
@@ -40,6 +55,13 @@ export const DataManagementModal: React.FC<DataManagementModalProps> = ({
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isCloudBusy, setIsCloudBusy] = useState(false);
+  const [snapshots, setSnapshots] = useState<SafetySnapshotMeta[]>([]);
+
+  // Load local safety snapshots on modal open
+  useEffect(() => {
+    const list = getSafetySnapshots(currentUser?.id);
+    setSnapshots(list);
+  }, [currentUser?.id]);
 
   const handleWipeAndStartFresh = async () => {
     if (
@@ -49,22 +71,23 @@ export const DataManagementModal: React.FC<DataManagementModalProps> = ({
     ) {
       const fresh = resetAllDataToFresh(currentUser?.id);
       onDataLoaded(fresh);
-      await saveCloudDataImmediate(fresh, currentUser);
+      await syncCloudImmediate(fresh, currentUser);
       setSuccessMessage('Successfully erased data for this account and started completely fresh.');
       setErrorMessage(null);
     }
   };
 
-  const handleCloudPush = async () => {
+  const handleSyncNow = async () => {
     if (!currentData) return;
     setIsCloudBusy(true);
     setErrorMessage(null);
     try {
-      const ok = await saveCloudDataImmediate(currentData, currentUser);
+      await flushPendingOfflineSync();
+      const ok = await syncCloudImmediate(currentData, currentUser);
       if (ok) {
-        setSuccessMessage('Successfully pushed latest account data to Supabase cloud.');
+        setSuccessMessage('Successfully synced latest data to Supabase cloud database.');
       } else {
-        setErrorMessage('Cloud push failed. Make sure you ran supabase_setup.sql in Supabase.');
+        setErrorMessage('Cloud sync failed. Check your network connection.');
       }
     } catch (err: any) {
       setErrorMessage(err.message || 'Cloud sync error');
@@ -91,6 +114,30 @@ export const DataManagementModal: React.FC<DataManagementModalProps> = ({
     }
   };
 
+  const handleRestoreSnapshot = async (dateISO: string) => {
+    if (
+      !window.confirm(
+        `Restore data from local safety snapshot of ${dateISO}? This will restore all habits, workouts, and logs from that snapshot and sync to cloud.`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      const restored = restoreSafetySnapshot(dateISO, currentUser?.id);
+      if (restored) {
+        onDataLoaded(restored);
+        await syncCloudImmediate(restored, currentUser);
+        setSuccessMessage(`Successfully restored safety snapshot from ${dateISO} and synced to cloud!`);
+        setErrorMessage(null);
+      } else {
+        setErrorMessage(`Could not read safety snapshot for ${dateISO}.`);
+      }
+    } catch (err: any) {
+      setErrorMessage(`Snapshot restoration error: ${err.message || ''}`);
+    }
+  };
+
   const handleExport = () => {
     try {
       exportDataAsJSON(currentUser?.id);
@@ -111,7 +158,7 @@ export const DataManagementModal: React.FC<DataManagementModalProps> = ({
         const text = event.target?.result as string;
         const imported = importDataFromJSON(text, currentUser?.id);
         onDataLoaded(imported);
-        await saveCloudDataImmediate(imported, currentUser);
+        await syncCloudImmediate(imported, currentUser);
         setSuccessMessage('Account data successfully restored and synced to cloud.');
         setErrorMessage(null);
       } catch (err: any) {
@@ -124,100 +171,101 @@ export const DataManagementModal: React.FC<DataManagementModalProps> = ({
   const handleResetToDemo = async () => {
     if (
       window.confirm(
-        'Load sample template dataset? This will load rich demo habits, objectives, and progressive overload gym logs for this account.'
+        'CAUTION: Load demo template data? Only use this if you want to replace this account with mock demo workouts and habits.'
       )
     ) {
       const demo = getMockSampleBackup();
       saveStoredData(demo, currentUser?.id);
       onDataLoaded(demo);
-      await saveCloudDataImmediate(demo, currentUser);
+      await syncCloudImmediate(demo, currentUser);
       setSuccessMessage('Loaded demo sample data for this account and synced to cloud.');
       setErrorMessage(null);
     }
   };
 
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-sm overflow-y-auto">
-      <div className="bg-surface-1 border border-surface-border w-full max-w-md rounded-2xl shadow-xl p-5 sm:p-6 relative my-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
+      <div className="bg-surface-1 border border-surface-border w-full max-w-lg rounded-2xl shadow-2xl p-5 sm:p-6 relative my-auto max-h-[92vh] overflow-y-auto">
         <button
           type="button"
           onClick={onClose}
-          className="absolute top-5 right-5 text-slate-400 hover:text-white"
+          className="absolute top-5 right-5 text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition"
         >
           <X className="w-5 h-5" />
         </button>
 
-        <div className="flex items-center gap-2 mb-3">
-          <Database className="w-4 h-4 text-blue-400" />
-          <h3 className="text-base font-semibold text-white">Data & Backup</h3>
+        <div className="flex items-center gap-2 mb-2">
+          <Database className="w-5 h-5 text-emerald-400" />
+          <h3 className="text-base font-bold text-white">Data Sync & Safety Vault</h3>
         </div>
 
         <p className="text-xs text-slate-400 mb-4">
-          All records are stored locally and ready for JSON backup or database synchronization.
+          Real-time zero-delay Supabase sync with automatic local rolling daily safety snapshots.
         </p>
 
         {successMessage && (
           <div className="mb-3 p-2.5 rounded-xl bg-emerald-950/40 border border-emerald-500/40 flex items-center gap-2 text-xs text-emerald-300">
-            <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
+            <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
             <span>{successMessage}</span>
           </div>
         )}
 
         {errorMessage && (
           <div className="mb-3 p-2.5 rounded-xl bg-rose-950/40 border border-rose-500/40 flex items-center gap-2 text-xs text-rose-300">
-            <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+            <AlertTriangle className="w-4 h-4 flex-shrink-0" />
             <span>{errorMessage}</span>
           </div>
         )}
 
         {/* Supabase Cloud Section */}
-        <div className="mb-4 p-3 rounded-xl bg-[#090d16] border border-[#1e2638]">
+        <div className="mb-4 p-3.5 rounded-xl bg-[#090d16] border border-[#1e2638]">
           <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-lg bg-emerald-500/15 text-emerald-400">
                 <Cloud className="w-4 h-4" />
               </div>
               <div>
-                <span className="text-xs font-semibold text-white">Supabase Cloud Sync</span>
+                <span className="text-xs font-bold text-white">Supabase Cloud Sync</span>
                 <span className="block text-[10px] font-mono text-slate-400">
-                  Project: vzdiltjsswuqrcvzyrfn
+                  {lastSynced ? `Last Synced: ${lastSynced.toLocaleTimeString()}` : 'Live zero-delay auto sync'}
                 </span>
               </div>
             </div>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-900 border border-slate-800">
               <span
                 className={`w-2 h-2 rounded-full ${
                   syncStatus === 'synced'
                     ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]'
                     : syncStatus === 'syncing'
                     ? 'bg-amber-400 animate-ping'
-                    : 'bg-slate-500'
+                    : syncStatus === 'offline'
+                    ? 'bg-amber-400'
+                    : 'bg-rose-400'
                 }`}
               />
-              <span className="text-[10px] font-mono text-slate-300 capitalize">{syncStatus}</span>
+              <span className="text-[10px] font-mono text-slate-200 capitalize font-medium">{syncStatus}</span>
             </div>
           </div>
 
           <p className="text-[11px] text-slate-400 mb-3">
-            Automatic real-time sync connects your mobile phone and desktop seamlessly with zero manual export/import needed.
+            Every workout set, habit, and sleep log is immediately synced to Supabase database the moment it is inputted. If offline, changes are queued and automatically pushed upon reconnect.
           </p>
 
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
               disabled={isCloudBusy}
-              onClick={handleCloudPush}
-              className="flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-xs font-semibold transition disabled:opacity-50"
+              onClick={handleSyncNow}
+              className="flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-xs font-semibold transition disabled:opacity-50 active-press"
             >
               {isCloudBusy ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-              <span>Push to Cloud</span>
+              <span>Sync Cloud Now</span>
             </button>
             <button
               type="button"
               disabled={isCloudBusy}
               onClick={handleCloudPull}
-              className="flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-300 text-xs font-semibold transition disabled:opacity-50"
+              className="flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 text-blue-300 text-xs font-semibold transition disabled:opacity-50 active-press"
             >
               {isCloudBusy ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
               <span>Pull from Cloud</span>
@@ -225,128 +273,143 @@ export const DataManagementModal: React.FC<DataManagementModalProps> = ({
           </div>
         </div>
 
-        <div className="space-y-2">
-
-          {/* Export Button */}
-          <button
-            type="button"
-            onClick={handleExport}
-            className="w-full flex items-center justify-between p-3 rounded-xl bg-surface-2 hover:bg-surface-3 border border-surface-border text-white text-xs font-semibold transition active-press"
-          >
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-blue-500/10 text-blue-400">
-                <Download className="w-4 h-4" />
-              </div>
-              <div className="text-left">
-                <div>Export Backup (JSON)</div>
-                <div className="text-[10px] text-slate-400 font-normal">
-                  Save all habits, splits, and workout logs
-                </div>
-              </div>
+        {/* Local Rolling Safety Snapshots Section */}
+        <div className="mb-4 p-3.5 rounded-xl bg-[#090d16] border border-[#1e2638]">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-emerald-400" />
+              <span className="text-xs font-bold text-white">Device Safety Snapshots (Rolling Backups)</span>
             </div>
-          </button>
+            <span className="text-[10px] font-mono text-emerald-400/90 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+              {snapshots.length} Available
+            </span>
+          </div>
 
-          {/* Import Button */}
-          <div>
-            <input
-              type="file"
-              ref={fileInputRef}
-              accept=".json"
-              onChange={handleFileUpload}
-              className="hidden"
-            />
+          <p className="text-[11px] text-slate-400 mb-3">
+            Independent daily snapshots stored locally on this device. Protected against browser refreshes, cache clearing, or account switches.
+          </p>
+
+          {snapshots.length === 0 ? (
+            <div className="text-[11px] text-slate-500 italic py-2">
+              Your first daily safety snapshot will be recorded automatically when you save changes today.
+            </div>
+          ) : (
+            <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+              {snapshots.map((snap) => (
+                <div
+                  key={snap.key}
+                  className="flex items-center justify-between p-2 rounded-lg bg-surface-2/60 border border-surface-border text-xs"
+                >
+                  <div className="flex items-center gap-2">
+                    <History className="w-3.5 h-3.5 text-slate-400" />
+                    <div>
+                      <span className="font-mono text-white text-[11px] font-semibold">{snap.dateISO}</span>
+                      <span className="block text-[10px] text-slate-400">
+                        {snap.workoutsCount} workouts • {snap.habitsCount} habits • {snap.sleepLogsCount} sleep logs
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleRestoreSnapshot(snap.dateISO)}
+                    className="px-2.5 py-1 rounded-md bg-emerald-500/15 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 text-[10px] font-semibold transition active-press"
+                  >
+                    Restore
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* JSON Manual Export & Import */}
+        <div className="space-y-2 mb-4">
+          <div className="text-[10px] font-mono uppercase tracking-wider text-slate-500 mb-1">
+            Manual File Backup
+          </div>
+          <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="w-full flex items-center justify-between p-3 rounded-xl bg-surface-2 hover:bg-surface-3 border border-surface-border text-white text-xs font-semibold transition active-press"
+              onClick={handleExport}
+              className="flex items-center justify-center gap-2 p-2.5 rounded-xl bg-surface-2 hover:bg-surface-3 border border-surface-border text-white text-xs font-semibold transition active-press"
             >
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400">
-                  <Upload className="w-4 h-4" />
-                </div>
-                <div className="text-left">
-                  <div>Import Backup (JSON)</div>
-                  <div className="text-[10px] text-slate-400 font-normal">
-                    Restore previously exported JSON data
-                  </div>
-                </div>
-              </div>
+              <Download className="w-3.5 h-3.5 text-blue-400" />
+              <span>Export JSON</span>
+            </button>
+
+            <div>
+              <input
+                type="file"
+                ref={fileInputRef}
+                accept=".json"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full flex items-center justify-center gap-2 p-2.5 rounded-xl bg-surface-2 hover:bg-surface-3 border border-surface-border text-white text-xs font-semibold transition active-press"
+              >
+                <Upload className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Import JSON</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Danger Zone: Erase / Demo */}
+        <div className="space-y-2 pt-2 border-t border-surface-border">
+          <div className="text-[10px] font-mono uppercase tracking-wider text-slate-500 mb-1">
+            Maintenance
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            {/* Force Reload / Clear Cache */}
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  if ('serviceWorker' in navigator) {
+                    const regs = await navigator.serviceWorker.getRegistrations();
+                    for (const r of regs) await r.unregister();
+                  }
+                  if ('caches' in window) {
+                    const keys = await caches.keys();
+                    for (const k of keys) await caches.delete(k);
+                  }
+                } catch (_) {}
+                window.location.href = window.location.origin + window.location.pathname + '?v=' + Date.now();
+              }}
+              className="flex items-center justify-center gap-1.5 p-2 rounded-xl bg-purple-950/25 hover:bg-purple-900/40 border border-purple-800/40 text-purple-300 text-xs font-semibold transition active-press"
+              title="Clear cached PWA service worker and reload"
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-purple-400" />
+              <span>Reload PWA</span>
+            </button>
+
+            {/* Wipe & Fresh */}
+            <button
+              type="button"
+              onClick={handleWipeAndStartFresh}
+              className="flex items-center justify-center gap-1.5 p-2 rounded-xl bg-rose-950/25 hover:bg-rose-900/40 border border-rose-800/40 text-rose-300 text-xs font-semibold transition active-press"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+              <span>Erase & Clean</span>
             </button>
           </div>
 
-          {/* Wipe All & Start Fresh */}
-          <button
-            type="button"
-            onClick={handleWipeAndStartFresh}
-            className="w-full flex items-center justify-between p-3 rounded-xl bg-rose-950/25 hover:bg-rose-900/40 border border-rose-800/40 text-rose-300 text-xs font-semibold transition active-press"
-          >
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-rose-500/15 text-rose-400">
-                <Trash2 className="w-4 h-4" />
-              </div>
-              <div className="text-left">
-                <div className="font-bold text-rose-200">Erase All & Start Fresh</div>
-                <div className="text-[10px] text-rose-400/80 font-normal">
-                  Wipe all mock habits, workouts, logs & start completely clean
-                </div>
-              </div>
-            </div>
-          </button>
-
-          {/* Reset Demo Data */}
           <button
             type="button"
             onClick={handleResetToDemo}
-            className="w-full flex items-center justify-between p-3 rounded-xl bg-surface-1 hover:bg-surface-2 border border-surface-border text-slate-300 text-xs font-semibold transition"
+            className="w-full text-center py-1.5 text-[10px] text-slate-500 hover:text-slate-400 font-mono transition"
           >
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-surface-2 text-slate-400">
-                <RotateCcw className="w-4 h-4" />
-              </div>
-              <div className="text-left">
-                <div>Load Sample Dataset</div>
-                <div className="text-[10px] text-slate-400 font-normal">
-                  Re-seed 30 days of workouts and progressive overload
-                </div>
-              </div>
-            </div>
-          </button>
-
-          {/* Force App Update & Cache Clear */}
-          <button
-            type="button"
-            onClick={async () => {
-              try {
-                if ('serviceWorker' in navigator) {
-                  const regs = await navigator.serviceWorker.getRegistrations();
-                  for (const r of regs) await r.unregister();
-                }
-                if ('caches' in window) {
-                  const keys = await caches.keys();
-                  for (const k of keys) await caches.delete(k);
-                }
-              } catch (_) {}
-              window.location.href = window.location.origin + window.location.pathname + '?v=' + Date.now();
-            }}
-            className="w-full flex items-center justify-between p-3 rounded-xl bg-purple-950/25 hover:bg-purple-900/40 border border-purple-800/40 text-purple-300 text-xs font-semibold transition active-press"
-          >
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-purple-500/15 text-purple-400">
-                <RefreshCw className="w-4 h-4" />
-              </div>
-              <div className="text-left">
-                <div className="font-bold text-purple-200">Force Reload & Clear Mobile Cache</div>
-                <div className="text-[10px] text-purple-400/80 font-normal">
-                  Bypass phone browser/PWA cache and fetch latest version
-                </div>
-              </div>
-            </div>
+            Load Sample Template Data (Demo Only)
           </button>
         </div>
 
         <div className="mt-4 pt-3 border-t border-surface-border flex items-center justify-between">
           <span className="text-[10px] font-mono text-slate-500">
-            Build: 2026.09.24.4 (Live)
+            Build: 2026.10.16 (Zero-Delay Sync & Vault)
           </span>
           <button
             type="button"

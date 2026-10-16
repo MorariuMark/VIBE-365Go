@@ -116,6 +116,113 @@ export function getStoredData(userId?: string): AppDataBackup {
   }
 }
 
+export interface SafetySnapshotMeta {
+  key: string;
+  dateISO: string;
+  timestamp: string;
+  habitsCount: number;
+  workoutsCount: number;
+  sleepLogsCount: number;
+  tasksCount: number;
+  breakersCount: number;
+}
+
+export function getSafetySnapshotKey(userId?: string, dateISO?: string): string {
+  const isMark = !userId || userId === 'user_mark' || userId === 'mark';
+  const u = isMark ? 'mark' : userId;
+  const d = dateISO || new Date().toISOString().slice(0, 10);
+  return `vibe_safety_snapshot_${u}_${d}`;
+}
+
+export function getSafetyIndexKey(userId?: string): string {
+  const isMark = !userId || userId === 'user_mark' || userId === 'mark';
+  const u = isMark ? 'mark' : userId;
+  return `vibe_safety_index_${u}`;
+}
+
+export function recordDailySafetySnapshot(data: AppDataBackup, userId?: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const snapKey = getSafetySnapshotKey(userId, today);
+    const indexKey = getSafetyIndexKey(userId);
+
+    const meta: SafetySnapshotMeta = {
+      key: snapKey,
+      dateISO: today,
+      timestamp: new Date().toISOString(),
+      habitsCount: data.habits?.length || 0,
+      workoutsCount: Object.keys(data.workoutLogs || {}).length,
+      sleepLogsCount: Object.keys(data.sleepLogs || {}).length,
+      tasksCount: (data.tasks?.length || 0) + (data.completedTasks?.length || 0),
+      breakersCount: data.habitBreakers?.length || 0,
+    };
+
+    // Store today's safety snapshot payload in independent key
+    localStorage.setItem(snapKey, JSON.stringify(data));
+
+    // Update index of daily snapshots
+    let index: SafetySnapshotMeta[] = [];
+    const rawIndex = localStorage.getItem(indexKey);
+    if (rawIndex) {
+      try {
+        index = JSON.parse(rawIndex);
+      } catch (e) {
+        index = [];
+      }
+    }
+
+    // Filter out today if already present, then unshift
+    index = index.filter((item) => item.dateISO !== today);
+    index.unshift(meta);
+
+    // Keep rolling last 14 daily safety snapshots
+    const MAX_SNAPSHOTS = 14;
+    if (index.length > MAX_SNAPSHOTS) {
+      const removed = index.slice(MAX_SNAPSHOTS);
+      index = index.slice(0, MAX_SNAPSHOTS);
+      for (const r of removed) {
+        try {
+          localStorage.removeItem(r.key);
+        } catch (_) {}
+      }
+    }
+
+    localStorage.setItem(indexKey, JSON.stringify(index));
+  } catch (err) {
+    console.warn('[SafetySnapshot] Unable to record rolling safety snapshot:', err);
+  }
+}
+
+export function getSafetySnapshots(userId?: string): SafetySnapshotMeta[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const indexKey = getSafetyIndexKey(userId);
+    const rawIndex = localStorage.getItem(indexKey);
+    if (!rawIndex) return [];
+    return JSON.parse(rawIndex) as SafetySnapshotMeta[];
+  } catch (err) {
+    console.warn('[SafetySnapshot] Failed to read safety index:', err);
+    return [];
+  }
+}
+
+export function restoreSafetySnapshot(dateISO: string, userId?: string): AppDataBackup | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const snapKey = getSafetySnapshotKey(userId, dateISO);
+    const raw = localStorage.getItem(snapKey);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const normalized = normalizeAppData(parsed);
+    saveStoredData(normalized, userId);
+    return normalized;
+  } catch (err) {
+    console.error('[SafetySnapshot] Failed to restore safety snapshot:', err);
+    return null;
+  }
+}
+
 export function saveStoredData(data: AppDataBackup, userId?: string): void {
   if (typeof window === 'undefined') return;
   try {
@@ -127,6 +234,9 @@ export function saveStoredData(data: AppDataBackup, userId?: string): void {
     if (isMark) {
       localStorage.setItem(DEFAULT_STORAGE_KEY, JSON.stringify(data));
     }
+
+    // Maintain automatic daily safety snapshot
+    recordDailySafetySnapshot(data, userId);
   } catch (err) {
     console.error('Failed to save data to localStorage', err);
   }
