@@ -27,6 +27,7 @@ import {
   Layers,
   Save,
   Check,
+  Settings,
   Bookmark,
   FileText,
   Edit2,
@@ -1226,6 +1227,31 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                               </>
                             )}
 
+                            {/* Small Exercise Settings & Plate Mapping Button */}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setActiveSettingsExerciseId(
+                                  activeSettingsExerciseId === loggedEx.id ? null : loggedEx.id
+                                )
+                              }
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition active-press cursor-pointer ${
+                                activeSettingsExerciseId === loggedEx.id
+                                  ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md ring-1 ring-amber-400 font-bold'
+                                  : loggedEx.weightMapping?.enabled
+                                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 hover:bg-amber-500/30'
+                                  : 'bg-[#141824] hover:bg-[#1f2638] text-amber-400 hover:text-amber-300 border-amber-500/30 hover:border-amber-500/60'
+                              }`}
+                              title={`Settings for ${loggedEx.exerciseName} (plate weights & mapping)`}
+                            >
+                              <Settings className={`w-3.5 h-3.5 ${activeSettingsExerciseId === loggedEx.id ? 'text-slate-950' : 'text-amber-400'}`} />
+                              <span>
+                                {loggedEx.weightMapping?.enabled
+                                  ? `${loggedEx.weightMapping.plateWeightKg}kg/pl (${loggedEx.weightMapping.displayMode === 'plates' ? 'Plates' : 'Kg'})`
+                                  : 'Settings'}
+                              </span>
+                            </button>
+
                             {/* Exercise Tags */}
                             {(loggedEx.tags || []).map((t) => (
                               <span
@@ -1301,6 +1327,179 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                           </button>
                         </div>
 
+                        {/* Exercise Settings & Plate Weight Mapping Menu */}
+                        {activeSettingsExerciseId === loggedEx.id && (
+                          <div className="p-3.5 sm:p-4 rounded-xl bg-[#0a0d16] border border-amber-500/50 space-y-3.5 animate-fade-in shadow-2xl">
+                            <div className="flex items-center justify-between border-b border-[#1b2236] pb-2">
+                              <div className="flex items-center gap-2">
+                                <div className="p-1.5 rounded-lg bg-amber-500/20 text-amber-400">
+                                  <Scale className="w-4 h-4" />
+                                </div>
+                                <div>
+                                  <span className="text-xs font-bold text-white uppercase tracking-wider block">
+                                    {loggedEx.exerciseName} &bull; Settings &amp; Weight Mapping
+                                  </span>
+                                  <span className="text-[10px] text-slate-400 font-mono">
+                                    Map unnumbered gym plates to weights or display plate count
+                                  </span>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setActiveSettingsExerciseId(null)}
+                                className="p-1 rounded text-slate-400 hover:text-white hover:bg-white/10 transition cursor-pointer"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+
+                            {/* Toggle Plate Count */}
+                            <div className="flex items-center justify-between bg-[#0e121d] p-3 rounded-xl border border-[#1b2236]">
+                              <div>
+                                <span className="text-xs font-bold text-slate-200 block">
+                                  Count Plates Mode
+                                </span>
+                                <span className="text-[11px] text-slate-400 block mt-0.5">
+                                  For gym machines or stacks with unnumbered plates
+                                </span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const current = loggedEx.weightMapping || {
+                                    enabled: false,
+                                    plateWeightKg: 9,
+                                    displayMode: 'weight',
+                                  };
+                                  handleUpdateExerciseWeightMapping(loggedEx.id, {
+                                    ...current,
+                                    enabled: !current.enabled,
+                                  });
+                                }}
+                                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition border cursor-pointer ${
+                                  loggedEx.weightMapping?.enabled
+                                    ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md font-black'
+                                    : 'bg-[#141824] text-slate-400 border-[#232a3e] hover:text-white'
+                                }`}
+                              >
+                                {loggedEx.weightMapping?.enabled ? 'ENABLED' : 'DISABLED'}
+                              </button>
+                            </div>
+
+                            {loggedEx.weightMapping?.enabled && (
+                              <div className="space-y-3 pt-1">
+                                {/* Weight per Plate */}
+                                <div>
+                                  <label className="block text-[11px] font-mono uppercase tracking-wider text-slate-300 mb-1">
+                                    Weight Per 1 Plate (e.g. 1 plate is 9kg)
+                                  </label>
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <div className="flex items-center gap-1.5">
+                                      <input
+                                        type="number"
+                                        step="any"
+                                        min="0.1"
+                                        value={loggedEx.weightMapping.plateWeightKg ?? 9}
+                                        onFocus={(e) => e.target.select()}
+                                        onChange={(e) => {
+                                          const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                                          handleUpdateExerciseWeightMapping(loggedEx.id, {
+                                            ...loggedEx.weightMapping!,
+                                            plateWeightKg: val,
+                                          });
+                                        }}
+                                        className="w-24 px-2.5 py-1.5 rounded-lg bg-[#141824] border border-[#232a3e] text-xs font-mono font-bold text-amber-300 focus:outline-none focus:border-amber-500"
+                                      />
+                                      <span className="text-xs font-mono text-slate-400">kg / plate</span>
+                                    </div>
+
+                                    {/* Quick Presets */}
+                                    <div className="flex items-center gap-1">
+                                      {[5, 9, 10, 15, 20].map((preset) => (
+                                        <button
+                                          key={preset}
+                                          type="button"
+                                          onClick={() =>
+                                            handleUpdateExerciseWeightMapping(loggedEx.id, {
+                                              ...loggedEx.weightMapping!,
+                                              plateWeightKg: preset,
+                                            })
+                                          }
+                                          className={`px-2.5 py-1 rounded-md text-[11px] font-mono border transition cursor-pointer ${
+                                            loggedEx.weightMapping?.plateWeightKg === preset
+                                              ? 'bg-amber-500/25 text-amber-300 border-amber-500/60 font-bold'
+                                              : 'bg-[#141824] text-slate-400 border-[#232a3e] hover:text-white'
+                                          }`}
+                                        >
+                                          {preset}kg
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Display Mode Selection */}
+                                <div>
+                                  <label className="block text-[11px] font-mono uppercase tracking-wider text-slate-300 mb-1.5">
+                                    Display Mode When Entering Sets
+                                  </label>
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        handleUpdateExerciseWeightMapping(loggedEx.id, {
+                                          ...loggedEx.weightMapping!,
+                                          displayMode: 'weight',
+                                        })
+                                      }
+                                      className={`p-3 rounded-xl border text-left transition cursor-pointer ${
+                                        loggedEx.weightMapping.displayMode === 'weight'
+                                          ? 'bg-amber-950/30 border-amber-500/70 text-amber-200'
+                                          : 'bg-[#0e121d] border-[#1b2236] text-slate-400 hover:text-white'
+                                      }`}
+                                    >
+                                      <div className="font-bold text-xs flex items-center justify-between">
+                                        <span>Automatically display weight</span>
+                                        {loggedEx.weightMapping.displayMode === 'weight' && (
+                                          <Check className="w-3.5 h-3.5 text-amber-400" />
+                                        )}
+                                      </div>
+                                      <p className="text-[10px] text-slate-400 mt-1 leading-snug">
+                                        Input 5 plates &times; 12 reps &rarr; App automatically converts and displays {5 * (loggedEx.weightMapping.plateWeightKg || 9)} kg
+                                      </p>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        handleUpdateExerciseWeightMapping(loggedEx.id, {
+                                          ...loggedEx.weightMapping!,
+                                          displayMode: 'plates',
+                                        })
+                                      }
+                                      className={`p-3 rounded-xl border text-left transition cursor-pointer ${
+                                        loggedEx.weightMapping.displayMode === 'plates'
+                                          ? 'bg-amber-950/30 border-amber-500/70 text-amber-200'
+                                          : 'bg-[#0e121d] border-[#1b2236] text-slate-400 hover:text-white'
+                                      }`}
+                                    >
+                                      <div className="font-bold text-xs flex items-center justify-between">
+                                        <span>Display plates instead of kg</span>
+                                        {loggedEx.weightMapping.displayMode === 'plates' && (
+                                          <Check className="w-3.5 h-3.5 text-amber-400" />
+                                        )}
+                                      </div>
+                                      <p className="text-[10px] text-slate-400 mt-1 leading-snug">
+                                        Displays 5 plates in set table (equivalent to {5 * (loggedEx.weightMapping.plateWeightKg || 9)} kg)
+                                      </p>
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         {/* Sets Table */}
                         <div className="space-y-2">
                           {/* Desktop Header */}
@@ -1349,24 +1548,98 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                                   </button>
                                 </div>
                                 <div className="col-span-3 flex items-center gap-1">
-                                  <input
-                                    type="number"
-                                    step="any"
-                                    min="0"
-                                    value={set.weightKg ?? ''}
-                                    onFocus={() => {
-                                      if (selectedSetTarget?.setId !== set.id) {
-                                        setSelectedSetTarget({ exerciseId: loggedEx.id, setId: set.id, setNumber: set.setNumber });
-                                      }
-                                    }}
-                                    onChange={(e) =>
-                                      handleUpdateSet(loggedEx.id, set.id, {
-                                        weightKg: e.target.value === '' ? '' : e.target.value,
-                                      })
-                                    }
-                                    className="w-full px-2 py-1 rounded bg-[#090b10] border border-[#232a3e] text-xs font-mono font-bold text-white focus:outline-none focus:border-blue-500"
-                                  />
-                                  <span className="text-[10px] font-mono text-slate-500">kg</span>
+                                  {loggedEx.weightMapping?.enabled ? (
+                                    loggedEx.weightMapping.displayMode === 'plates' ? (
+                                      <div className="flex items-center gap-1 w-full">
+                                        <input
+                                          type="number"
+                                          step="any"
+                                          min="0"
+                                          placeholder="plates"
+                                          value={set.weightKg ?? ''}
+                                          onFocus={(e) => {
+                                            e.target.select();
+                                            if (selectedSetTarget?.setId !== set.id) {
+                                              setSelectedSetTarget({ exerciseId: loggedEx.id, setId: set.id, setNumber: set.setNumber });
+                                            }
+                                          }}
+                                          onChange={(e) =>
+                                            handleUpdateSet(loggedEx.id, set.id, {
+                                              weightKg: e.target.value === '' ? '' : e.target.value,
+                                            })
+                                          }
+                                          className="w-full px-2 py-1 rounded bg-[#090b10] border border-amber-500/50 text-xs font-mono font-bold text-amber-300 focus:outline-none focus:border-amber-400"
+                                        />
+                                        <span className="text-[10px] font-mono text-amber-400 font-bold whitespace-nowrap">pl</span>
+                                        {Number(set.weightKg) > 0 && (
+                                          <span className="text-[9px] font-mono text-slate-400 whitespace-nowrap" title={`${set.weightKg} plates × ${loggedEx.weightMapping.plateWeightKg || 9}kg`}>
+                                            ({(Number(set.weightKg) * (loggedEx.weightMapping.plateWeightKg || 9)).toFixed(1).replace(/\.0$/, '')}k)
+                                          </span>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center gap-1 w-full">
+                                        <div className="relative flex-1 min-w-[56px]">
+                                          <input
+                                            type="number"
+                                            step="any"
+                                            min="0"
+                                            placeholder="plates"
+                                            value={
+                                              set.weightKg !== '' && set.weightKg !== undefined && Number(set.weightKg) > 0
+                                                ? Number((Number(set.weightKg) / (loggedEx.weightMapping.plateWeightKg || 9)).toFixed(2))
+                                                : (set.weightKg ?? '')
+                                            }
+                                            onFocus={(e) => {
+                                              e.target.select();
+                                              if (selectedSetTarget?.setId !== set.id) {
+                                                setSelectedSetTarget({ exerciseId: loggedEx.id, setId: set.id, setNumber: set.setNumber });
+                                              }
+                                            }}
+                                            onChange={(e) => {
+                                              const raw = e.target.value;
+                                              if (raw === '') {
+                                                handleUpdateSet(loggedEx.id, set.id, { weightKg: '' });
+                                              } else {
+                                                const plates = parseFloat(raw);
+                                                const computedKg = isNaN(plates) ? '' : Number((plates * (loggedEx.weightMapping?.plateWeightKg || 9)).toFixed(2));
+                                                handleUpdateSet(loggedEx.id, set.id, { weightKg: computedKg });
+                                              }
+                                            }}
+                                            className="w-full px-1.5 py-1 pr-4 rounded bg-[#090b10] border border-amber-500/50 text-xs font-mono font-bold text-amber-300 focus:outline-none focus:border-amber-400"
+                                            title={`Enter plates. Auto-converts × ${loggedEx.weightMapping.plateWeightKg || 9}kg`}
+                                          />
+                                          <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[9px] font-mono text-amber-400/80 pointer-events-none">p</span>
+                                        </div>
+                                        <span className="text-slate-500 text-[10px]">&rarr;</span>
+                                        <span className="text-xs font-mono font-bold text-white px-1.5 py-1 rounded bg-[#141824] border border-[#232a3e] whitespace-nowrap">
+                                          {set.weightKg !== '' && set.weightKg !== undefined ? `${set.weightKg}k` : '0k'}
+                                        </span>
+                                      </div>
+                                    )
+                                  ) : (
+                                    <>
+                                      <input
+                                        type="number"
+                                        step="any"
+                                        min="0"
+                                        value={set.weightKg ?? ''}
+                                        onFocus={(e) => {
+                                          e.target.select();
+                                          if (selectedSetTarget?.setId !== set.id) {
+                                            setSelectedSetTarget({ exerciseId: loggedEx.id, setId: set.id, setNumber: set.setNumber });
+                                          }
+                                        }}
+                                        onChange={(e) =>
+                                          handleUpdateSet(loggedEx.id, set.id, {
+                                            weightKg: e.target.value === '' ? '' : e.target.value,
+                                          })
+                                        }
+                                        className="w-full px-2 py-1 rounded bg-[#090b10] border border-[#232a3e] text-xs font-mono font-bold text-white focus:outline-none focus:border-blue-500"
+                                      />
+                                      <span className="text-[10px] font-mono text-slate-500">kg</span>
+                                    </>
+                                  )}
                                 </div>
                                 <div className="col-span-2 flex items-center gap-1">
                                   <input
@@ -1595,25 +1868,101 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                                 <div className="grid grid-cols-2 gap-2">
                                   <div>
                                     <label className="block text-[10px] font-mono text-slate-400 mb-0.5">
-                                      Weight (kg)
+                                      {loggedEx.weightMapping?.enabled
+                                        ? (loggedEx.weightMapping.displayMode === 'plates'
+                                            ? `Plates (${loggedEx.weightMapping.plateWeightKg}kg/pl)`
+                                            : `Plates ➔ Weight (${loggedEx.weightMapping.plateWeightKg}kg/pl)`)
+                                        : 'Weight (kg)'}
                                     </label>
-                                    <input
-                                      type="number"
-                                      step="any"
-                                      min="0"
-                                      value={set.weightKg ?? ''}
-                                      onFocus={() => {
-                                        if (selectedSetTarget?.setId !== set.id) {
-                                          setSelectedSetTarget({ exerciseId: loggedEx.id, setId: set.id, setNumber: set.setNumber });
+                                    {loggedEx.weightMapping?.enabled ? (
+                                      loggedEx.weightMapping.displayMode === 'plates' ? (
+                                        <div className="flex items-center gap-1.5">
+                                          <input
+                                            type="number"
+                                            step="any"
+                                            min="0"
+                                            placeholder="plates"
+                                            value={set.weightKg ?? ''}
+                                            onFocus={(e) => {
+                                              e.target.select();
+                                              if (selectedSetTarget?.setId !== set.id) {
+                                                setSelectedSetTarget({ exerciseId: loggedEx.id, setId: set.id, setNumber: set.setNumber });
+                                              }
+                                            }}
+                                            onChange={(e) =>
+                                              handleUpdateSet(loggedEx.id, set.id, {
+                                                weightKg: e.target.value === '' ? '' : e.target.value,
+                                              })
+                                            }
+                                            className="w-full px-2.5 py-1.5 rounded bg-[#090b10] border border-amber-500/50 text-xs font-mono font-bold text-amber-300"
+                                          />
+                                          <span className="text-xs font-mono text-amber-400 font-bold">pl</span>
+                                          {Number(set.weightKg) > 0 && (
+                                            <span className="text-[10px] font-mono text-slate-400 whitespace-nowrap">
+                                              ({(Number(set.weightKg) * (loggedEx.weightMapping.plateWeightKg || 9)).toFixed(1).replace(/\.0$/, '')}kg)
+                                            </span>
+                                          )}
+                                        </div>
+                                      ) : (
+                                        <div className="flex items-center gap-1.5">
+                                          <div className="relative flex-1">
+                                            <input
+                                              type="number"
+                                              step="any"
+                                              min="0"
+                                              placeholder="plates"
+                                              value={
+                                                set.weightKg !== '' && set.weightKg !== undefined && Number(set.weightKg) > 0
+                                                  ? Number((Number(set.weightKg) / (loggedEx.weightMapping.plateWeightKg || 9)).toFixed(2))
+                                                  : (set.weightKg ?? '')
+                                              }
+                                              onFocus={(e) => {
+                                                e.target.select();
+                                                if (selectedSetTarget?.setId !== set.id) {
+                                                  setSelectedSetTarget({ exerciseId: loggedEx.id, setId: set.id, setNumber: set.setNumber });
+                                                }
+                                              }}
+                                              onChange={(e) => {
+                                                const raw = e.target.value;
+                                                if (raw === '') {
+                                                  handleUpdateSet(loggedEx.id, set.id, { weightKg: '' });
+                                                } else {
+                                                  const plates = parseFloat(raw);
+                                                  const computedKg = isNaN(plates) ? '' : Number((plates * (loggedEx.weightMapping?.plateWeightKg || 9)).toFixed(2));
+                                                  handleUpdateSet(loggedEx.id, set.id, { weightKg: computedKg });
+                                                }
+                                              }}
+                                              className="w-full px-2 py-1.5 pr-6 rounded bg-[#090b10] border border-amber-500/50 text-xs font-mono font-bold text-amber-300"
+                                              title={`Enter plates. Auto-converts to weight`}
+                                            />
+                                            <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] font-mono text-amber-400/80 pointer-events-none">pl</span>
+                                          </div>
+                                          <span className="text-slate-500 text-xs">&rarr;</span>
+                                          <div className="px-2 py-1.5 rounded bg-[#141824] border border-[#232a3e] text-xs font-mono font-bold text-white min-w-[55px] text-center">
+                                            {set.weightKg !== '' && set.weightKg !== undefined ? `${set.weightKg} kg` : '0 kg'}
+                                          </div>
+                                        </div>
+                                      )
+                                    ) : (
+                                      <input
+                                        type="number"
+                                        step="any"
+                                        min="0"
+                                        value={set.weightKg ?? ''}
+                                        onFocus={(e) => {
+                                          e.target.select();
+                                          if (selectedSetTarget?.setId !== set.id) {
+                                            setSelectedSetTarget({ exerciseId: loggedEx.id, setId: set.id, setNumber: set.setNumber });
+                                          }
+                                        }}
+                                        onChange={(e) =>
+                                          handleUpdateSet(loggedEx.id, set.id, {
+                                            weightKg: e.target.value === '' ? '' : e.target.value,
+                                          })
                                         }
-                                      }}
-                                      onChange={(e) =>
-                                        handleUpdateSet(loggedEx.id, set.id, {
-                                          weightKg: e.target.value === '' ? '' : e.target.value,
-                                        })
-                                      }
-                                      className="w-full px-2.5 py-1.5 rounded bg-[#090b10] border border-[#232a3e] text-xs font-mono font-bold text-white"
-                                    />
+                                        className="w-full px-2.5 py-1.5 rounded bg-[#090b10] border border-[#232a3e] text-xs font-mono font-bold text-white"
+                                      />
+                                    )}
                                   </div>
                                   <div>
                                     <label className="block text-[10px] font-mono text-slate-400 mb-0.5">

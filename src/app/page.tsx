@@ -127,6 +127,7 @@ export default function Home() {
   const [isDataModalOpen, setIsDataModalOpen] = useState(false);
   const [isTrashModalOpen, setIsTrashModalOpen] = useState(false);
   const [isActionLogModalOpen, setIsActionLogModalOpen] = useState(false);
+  const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
 
   // Daily Google Drive Backup State
   const [backupReminderDismissed, setBackupReminderDismissed] = useState<boolean>(false);
@@ -1260,10 +1261,10 @@ export default function Home() {
   const auditCount = (data.actionLogs || []).length;
 
   return (
-    <div className="min-h-screen bg-[#07080c] text-slate-100 flex flex-col antialiased selection:bg-emerald-500 selection:text-black">
+    <div className="min-h-screen bg-[#07080c] text-slate-100 flex flex-col antialiased selection:bg-emerald-500 selection:text-black w-full max-w-full overflow-x-hidden">
       {/* Precision Engineered Top Bar */}
-      <header className="sticky top-0 z-40 bg-[#07080c]/95 border-b border-[#1a1f2e] backdrop-blur-xl pt-[max(env(safe-area-inset-top,0px),18px)] sm:pt-0">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 min-h-16 py-2 flex flex-wrap md:flex-nowrap items-center justify-between gap-2 sm:gap-4">
+      <header className="sticky top-0 z-40 bg-[#07080c]/95 border-b border-[#1a1f2e] backdrop-blur-xl pt-[max(env(safe-area-inset-top,0px),18px)] sm:pt-0 w-full max-w-full overflow-x-hidden">
+        <div className="max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 min-h-16 py-2 flex items-center justify-between gap-2 sm:gap-4">
           {/* Mobile Active Section Indicator */}
           <div className="flex md:hidden items-center gap-2 min-w-0">
             <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center flex-shrink-0">
@@ -1453,7 +1454,7 @@ export default function Home() {
             <button
               type="button"
               onClick={() => setActiveWorkoutDate(selectedDate)}
-              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold transition shadow-sm active-press"
+              className="hidden xl:flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold transition shadow-sm active-press"
               title="Log Workout Session"
             >
               <Dumbbell className="w-3.5 h-3.5 stroke-[2.5]" />
@@ -1464,7 +1465,7 @@ export default function Home() {
             <button
               type="button"
               onClick={() => setIsActionLogModalOpen(true)}
-              className="flex items-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-lg bg-[#0d1017] hover:bg-[#141924] text-slate-300 border border-[#1c2234] text-xs font-medium transition"
+              className="hidden xl:flex items-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-lg bg-[#0d1017] hover:bg-[#141924] text-slate-300 border border-[#1c2234] text-xs font-medium transition"
               title="View immutable action audit ledger"
             >
               <History className="w-3.5 h-3.5 text-blue-400" />
@@ -1545,7 +1546,7 @@ export default function Home() {
             <button
               type="button"
               onClick={() => setIsDataModalOpen(true)}
-              className="flex items-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-lg bg-[#0d1017] hover:bg-[#141924] text-slate-400 hover:text-slate-200 border border-[#1c2234] text-xs font-medium transition cursor-pointer"
+              className="hidden xl:flex items-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-lg bg-[#0d1017] hover:bg-[#141924] text-slate-400 hover:text-slate-200 border border-[#1c2234] text-xs font-medium transition cursor-pointer"
               title="Open Data Management, Cloud Vault & Snapshots"
             >
               <Database className="w-3.5 h-3.5 text-indigo-400" />
@@ -1725,7 +1726,7 @@ export default function Home() {
       </section>
 
       {/* Main Content Viewport */}
-      <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-5 sm:py-8 flex-1 w-full space-y-6 sm:space-y-8 pb-28 md:pb-8">
+      <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-5 sm:py-8 flex-1 w-full max-w-full space-y-6 sm:space-y-8 pb-28 md:pb-8 overflow-x-hidden">
         {/* TAB 1: HABITS */}
         {activeTab === 'habits' && (
           <div className="space-y-6">
@@ -1994,6 +1995,229 @@ export default function Home() {
         />
       )}
 
+      {/* Account Section Hub Modal */}
+      {isAccountModalOpen && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-fade-in"
+          onClick={() => setIsAccountModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-lg bg-[#0a0d14] border border-[#1b2234] rounded-2xl p-5 sm:p-6 shadow-2xl space-y-5 animate-slide-up max-h-[92dvh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-[#182030] pb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 font-bold text-lg">
+                  {session?.user?.username?.charAt(0).toUpperCase() || 'U'}
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <span>{session?.user?.displayName || session?.user?.username || 'Account'}</span>
+                    <span className="text-[10px] font-mono font-normal text-emerald-400 bg-emerald-950/70 px-1.5 py-0.2 rounded border border-emerald-800/40">
+                      @{session?.user?.username || 'user'}
+                    </span>
+                  </h3>
+                  <p className="text-[11px] font-mono text-slate-400 mt-0.5">
+                    Account &bull; Performance Hub
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAccountModalOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Quick Actions (The 4 Circled Actions + Vault + Sync) */}
+            <div className="space-y-2">
+              <span className="text-[11px] font-mono uppercase tracking-wider text-slate-400 font-semibold block px-1">
+                Account Actions
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {/* 1. Quick Workout / Log Session */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAccountModalOpen(false);
+                    setActiveWorkoutDate(selectedDate);
+                  }}
+                  className="p-3.5 rounded-xl bg-gradient-to-br from-emerald-950/40 to-[#0e1422] border border-emerald-500/40 hover:border-emerald-400 text-left transition active-press group cursor-pointer"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="p-2 rounded-lg bg-emerald-500/20 text-emerald-400">
+                      <Dumbbell className="w-4 h-4" />
+                    </div>
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800/50">
+                      Workout
+                    </span>
+                  </div>
+                  <div className="mt-2.5 font-bold text-xs text-white group-hover:text-emerald-300 transition">
+                    Log Workout Session
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-0.5 leading-tight">
+                    Log exercises, sets, reps &amp; overload
+                  </div>
+                </button>
+
+                {/* 2. System Settings */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAccountModalOpen(false);
+                    setActiveTab('settings');
+                  }}
+                  className="p-3.5 rounded-xl bg-gradient-to-br from-purple-950/40 to-[#0e1422] border border-purple-500/40 hover:border-purple-400 text-left transition active-press group cursor-pointer"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="p-2 rounded-lg bg-purple-500/20 text-purple-400">
+                      <Settings className="w-4 h-4" />
+                    </div>
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-purple-950 text-purple-300 border border-purple-800/50">
+                      System
+                    </span>
+                  </div>
+                  <div className="mt-2.5 font-bold text-xs text-white group-hover:text-purple-300 transition">
+                    Settings &amp; Preferences
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-0.5 leading-tight">
+                    Athlete profile, theme, targets &amp; AI
+                  </div>
+                </button>
+
+                {/* 3. Action Audit Logs Ledger */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAccountModalOpen(false);
+                    setIsActionLogModalOpen(true);
+                  }}
+                  className="p-3.5 rounded-xl bg-gradient-to-br from-blue-950/40 to-[#0e1422] border border-blue-500/40 hover:border-blue-400 text-left transition active-press group cursor-pointer"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="p-2 rounded-lg bg-blue-500/20 text-blue-400">
+                      <History className="w-4 h-4" />
+                    </div>
+                    {auditCount > 0 && (
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-950 text-blue-300 border border-blue-800/50 font-bold">
+                        {auditCount} logs
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-2.5 font-bold text-xs text-white group-hover:text-blue-300 transition">
+                    Audit Logs Ledger
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-0.5 leading-tight">
+                    Review immutable action audit records
+                  </div>
+                </button>
+
+                {/* 4. 30-Day Trash Can */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAccountModalOpen(false);
+                    setIsTrashModalOpen(true);
+                  }}
+                  className="p-3.5 rounded-xl bg-gradient-to-br from-rose-950/40 to-[#0e1422] border border-rose-500/40 hover:border-rose-400 text-left transition active-press group cursor-pointer"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="p-2 rounded-lg bg-rose-500/20 text-rose-400">
+                      <Trash2 className="w-4 h-4" />
+                    </div>
+                    {trashCount > 0 && (
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-rose-950 text-rose-300 border border-rose-800/50 font-bold">
+                        {trashCount} items
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-2.5 font-bold text-xs text-white group-hover:text-rose-300 transition">
+                    Trash Can (30d retention)
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-0.5 leading-tight">
+                    Recover or purge soft-deleted items
+                  </div>
+                </button>
+
+                {/* 5. Data Vault & Snapshots */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAccountModalOpen(false);
+                    setIsDataModalOpen(true);
+                  }}
+                  className="p-3.5 rounded-xl bg-[#0e1320] border border-[#1e273a] hover:border-indigo-500/50 text-left transition active-press group cursor-pointer"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="p-2 rounded-lg bg-indigo-500/20 text-indigo-400">
+                      <Database className="w-4 h-4" />
+                    </div>
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-800/50">
+                      Vault
+                    </span>
+                  </div>
+                  <div className="mt-2.5 font-bold text-xs text-white group-hover:text-indigo-300 transition">
+                    Data Vault &amp; Snapshots
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-0.5 leading-tight">
+                    JSON backups, cloud snapshots &amp; restore
+                  </div>
+                </button>
+
+                {/* 6. Instant Cloud Sync */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleTriggerLiveSync();
+                  }}
+                  className="p-3.5 rounded-xl bg-[#0e1320] border border-[#1e273a] hover:border-emerald-500/50 text-left transition active-press group cursor-pointer"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="p-2 rounded-lg bg-emerald-500/20 text-emerald-400">
+                      {syncStatus === 'syncing' ? (
+                        <RefreshCw className="w-4 h-4 animate-spin text-amber-400" />
+                      ) : (
+                        <Cloud className="w-4 h-4 text-emerald-400" />
+                      )}
+                    </div>
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-black/40 text-emerald-300 border border-emerald-900/50 uppercase font-semibold">
+                      {syncStatus}
+                    </span>
+                  </div>
+                  <div className="mt-2.5 font-bold text-xs text-white group-hover:text-emerald-300 transition">
+                    Supabase Cloud Sync
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-0.5 leading-tight">
+                    {lastSynced ? `Synced at ${lastSynced.toLocaleTimeString()}` : 'Tap to force instant live sync'}
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            {/* Logout Row */}
+            <div className="pt-3 border-t border-[#182030] flex items-center justify-between">
+              <span className="text-xs text-slate-400 font-mono">
+                Active Session
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAccountModalOpen(false);
+                  handleLogout();
+                }}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/50 text-xs font-bold transition shadow-sm active-press cursor-pointer"
+              >
+                <LogOut className="w-4 h-4 text-rose-400" />
+                <span>Log Out of Account</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 30-Day Trash Can Modal */}
       {isTrashModalOpen && (
         <TrashCanModal
@@ -2049,7 +2273,7 @@ export default function Home() {
       )}
 
       {/* Mobile Floating Bottom Dock (Strictly 6 Core Sections with Safe-Area insets) */}
-      <div className="fixed bottom-0 inset-x-0 z-40 md:hidden bg-[#090b10]/95 border-t border-[#1c2234] backdrop-blur-xl px-1.5 pt-1.5 pb-[max(0.6rem,env(safe-area-inset-bottom))] grid grid-cols-6 gap-1 shadow-2xl">
+      <div className="fixed bottom-0 inset-x-0 z-40 md:hidden bg-[#090b10]/95 border-t border-[#1c2234] backdrop-blur-xl px-1.5 pt-1.5 pb-[max(0.6rem,env(safe-area-inset-bottom))] grid grid-cols-6 gap-1 shadow-2xl w-full max-w-full overflow-hidden">
         <button
           type="button"
           onClick={() => setActiveTab('habits')}

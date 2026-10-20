@@ -8,6 +8,8 @@ import { MODEL_CATALOGUE, getModelsForProvider } from '@/lib/ai/models';
 import { ModelDefinition } from '@/lib/ai/types';
 import {
   Settings,
+  Dumbbell,
+  History,
   User,
   Moon,
   Clock,
@@ -49,6 +51,10 @@ interface SettingsViewProps {
   onUpdateSettings: (patch: Partial<UserSettings>) => void;
   onExportBackup: () => void;
   onImportBackup: (importedData: AppDataBackup) => void;
+  onOpenWorkout?: () => void;
+  onOpenLogs?: () => void;
+  onOpenTrash?: () => void;
+  onOpenVault?: () => void;
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
@@ -58,6 +64,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onUpdateSettings,
   onExportBackup,
   onImportBackup,
+  onOpenWorkout,
+  onOpenLogs,
+  onOpenTrash,
+  onOpenVault,
 }) => {
   const currentSettings: UserSettings = appData.settings || {
     userName: 'Athlete',
@@ -424,6 +434,55 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   <span>Log Out / Switch Account</span>
                 </button>
               )}
+            </div>
+
+            {/* Account Action Buttons */}
+            <div className="pt-3 border-t border-[#182234]">
+              <span className="text-[11px] font-mono uppercase tracking-wider text-slate-400 font-semibold block mb-2.5">
+                Account Quick Actions
+              </span>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                {onOpenWorkout && (
+                  <button
+                    type="button"
+                    onClick={onOpenWorkout}
+                    className="p-3 rounded-xl bg-emerald-950/30 hover:bg-emerald-900/40 border border-emerald-800/40 text-emerald-300 text-xs font-bold transition flex items-center gap-2 active-press"
+                  >
+                    <Dumbbell className="w-4 h-4 text-emerald-400" />
+                    <span>Log Workout</span>
+                  </button>
+                )}
+                {onOpenLogs && (
+                  <button
+                    type="button"
+                    onClick={onOpenLogs}
+                    className="p-3 rounded-xl bg-blue-950/30 hover:bg-blue-900/40 border border-blue-800/40 text-blue-300 text-xs font-bold transition flex items-center gap-2 active-press"
+                  >
+                    <History className="w-4 h-4 text-blue-400" />
+                    <span>Audit Logs</span>
+                  </button>
+                )}
+                {onOpenTrash && (
+                  <button
+                    type="button"
+                    onClick={onOpenTrash}
+                    className="p-3 rounded-xl bg-rose-950/30 hover:bg-rose-900/40 border border-rose-800/40 text-rose-300 text-xs font-bold transition flex items-center gap-2 active-press"
+                  >
+                    <Trash2 className="w-4 h-4 text-rose-400" />
+                    <span>Trash Can</span>
+                  </button>
+                )}
+                {onOpenVault && (
+                  <button
+                    type="button"
+                    onClick={onOpenVault}
+                    className="p-3 rounded-xl bg-indigo-950/30 hover:bg-indigo-900/40 border border-indigo-800/40 text-indigo-300 text-xs font-bold transition flex items-center gap-2 active-press"
+                  >
+                    <Database className="w-4 h-4 text-indigo-400" />
+                    <span>Data Vault</span>
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         )}
