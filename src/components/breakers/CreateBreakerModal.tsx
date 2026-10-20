@@ -27,7 +27,8 @@ export const CreateBreakerModal: React.FC<CreateBreakerModalProps> = ({
   const [color, setColor] = useState('#f43f5e'); // Rose accent by default
   const [trackingType, setTrackingType] = useState<BreakerTrackingType>('frequency');
   const [metricUnit, setMetricUnit] = useState('hours');
-  const [startingAllowance, setStartingAllowance] = useState<number>(21);
+  const [startingAllowanceInput, setStartingAllowanceInput] = useState<string>('21');
+  const startingAllowance = startingAllowanceInput === '' ? 0 : (parseFloat(startingAllowanceInput) || 0);
   const [durationMonths, setDurationMonths] = useState<number>(3);
   const [aggressiveness, setAggressiveness] = useState<BreakerAggressiveness>('linear');
   const [customPlan, setCustomPlan] = useState<number[]>([21, 14, 7, 0]);
@@ -87,7 +88,7 @@ export const CreateBreakerModal: React.FC<CreateBreakerModalProps> = ({
       aggressiveness,
       trackingType,
       metricUnit: trackingType === 'metric' ? metricUnit.trim() : undefined,
-      startingAllowance,
+      startingAllowance: (parseFloat(startingAllowanceInput) || 1),
       monthlyPlan: generatedPlan,
     });
 
@@ -164,7 +165,7 @@ export const CreateBreakerModal: React.FC<CreateBreakerModalProps> = ({
                 type="button"
                 onClick={() => {
                   setTrackingType('frequency');
-                  setStartingAllowance(21);
+                  setStartingAllowanceInput('21');
                 }}
                 className={`p-3 rounded-xl border text-left transition ${
                   trackingType === 'frequency'
@@ -182,7 +183,7 @@ export const CreateBreakerModal: React.FC<CreateBreakerModalProps> = ({
                 type="button"
                 onClick={() => {
                   setTrackingType('metric');
-                  setStartingAllowance(4.0);
+                  setStartingAllowanceInput('4.0');
                   setMetricUnit('hours');
                 }}
                 className={`p-3 rounded-xl border text-left transition ${
@@ -223,8 +224,10 @@ export const CreateBreakerModal: React.FC<CreateBreakerModalProps> = ({
                   type="number"
                   step="any"
                   min="0.1"
-                  value={startingAllowance}
-                  onChange={(e) => setStartingAllowance(parseFloat(e.target.value) || 1)}
+                  value={startingAllowanceInput}
+                  onFocus={(e) => e.target.select()}
+                  onChange={(e) => setStartingAllowanceInput(e.target.value)}
+                  onBlur={() => { if (!startingAllowanceInput.trim()) setStartingAllowanceInput('1'); }}
                   className="w-full px-3 py-1.5 rounded-lg bg-[#0e1119] border border-[#1b2131] text-xs font-mono font-bold text-white"
                 />
                 {metricUnit.toLowerCase().includes('h') && (
@@ -246,8 +249,10 @@ export const CreateBreakerModal: React.FC<CreateBreakerModalProps> = ({
                 type="number"
                 min="1"
                 max="31"
-                value={startingAllowance}
-                onChange={(e) => setStartingAllowance(parseInt(e.target.value, 10) || 1)}
+                value={startingAllowanceInput}
+                onFocus={(e) => e.target.select()}
+                onChange={(e) => setStartingAllowanceInput(e.target.value)}
+                onBlur={() => { if (!startingAllowanceInput.trim()) setStartingAllowanceInput('1'); }}
                 className="w-full px-3 py-1.5 rounded-lg bg-[#0e1119] border border-[#1b2131] text-xs font-mono font-bold text-white"
               />
             </div>

@@ -405,6 +405,7 @@ export const HabitList: React.FC<HabitListProps> = ({
                       min="1"
                       max={targetPeriod === 'day' ? 24 : targetPeriod === 'week' ? 7 : 31}
                       value={targetCountInput}
+                      onFocus={(e) => e.target.select()}
                       onChange={(e) => setTargetCountInput(e.target.value)}
                       className="w-full px-2.5 py-1.5 rounded-lg bg-surface-1 border border-surface-border text-xs text-white"
                     />

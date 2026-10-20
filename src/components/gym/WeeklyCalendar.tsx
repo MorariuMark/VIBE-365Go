@@ -33,7 +33,7 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
 }) => {
   const [weekReference, setWeekReference] = useState<Date>(new Date());
   const [isEditingGoal, setIsEditingGoal] = useState(false);
-  const [tempGoal, setTempGoal] = useState(gymProfile.workoutsPerWeekGoal);
+  const [tempGoal, setTempGoal] = useState<number | string>(gymProfile.workoutsPerWeekGoal);
 
   const daysOfWeek = getWeekDays(weekReference);
   const todayISO = getTodayISO();
@@ -103,21 +103,30 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
                   min="1"
                   max="7"
                   value={tempGoal}
+                  onFocus={(e) => e.target.select()}
                   onChange={(e) => {
-                    const val = Number(e.target.value);
-                    setTempGoal(val);
-                    if (val >= 1 && val <= 7) {
+                    setTempGoal(e.target.value);
+                    const val = parseInt(e.target.value, 10);
+                    if (!isNaN(val) && val >= 1 && val <= 7) {
                       onUpdateGymProfile({ workoutsPerWeekGoal: val });
                     }
                   }}
-                  onBlur={() => setIsEditingGoal(false)}
+                  onBlur={() => {
+                    const val = parseInt(String(tempGoal), 10);
+                    const fallback = !isNaN(val) && val >= 1 && val <= 7 ? val : (gymProfile.workoutsPerWeekGoal || 4);
+                    setTempGoal(fallback);
+                    onUpdateGymProfile({ workoutsPerWeekGoal: fallback });
+                    setIsEditingGoal(false);
+                  }}
                   autoFocus
                   className="w-10 px-1 py-0.5 rounded bg-surface-1 text-white font-semibold text-xs border border-surface-border"
                 />
                 <button
                   type="button"
                   onClick={() => {
-                    onUpdateGymProfile({ workoutsPerWeekGoal: tempGoal });
+                    const parsedGoal = parseInt(String(tempGoal), 10);
+                    const validGoal = !isNaN(parsedGoal) && parsedGoal >= 1 && parsedGoal <= 7 ? parsedGoal : (gymProfile.workoutsPerWeekGoal || 4);
+                    onUpdateGymProfile({ workoutsPerWeekGoal: validGoal });
                     setIsEditingGoal(false);
                   }}
                   className="text-[11px] text-emerald-400 font-semibold hover:underline"

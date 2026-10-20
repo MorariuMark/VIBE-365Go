@@ -74,12 +74,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   // Local form state
   const [userName, setUserName] = useState(currentSettings.userName);
   const [theme, setTheme] = useState(currentSettings.theme);
-  const [sleepTargetHours, setSleepTargetHours] = useState(currentSettings.sleepTargetHours);
+  const [sleepTargetHours, setSleepTargetHours] = useState<number | string>(currentSettings.sleepTargetHours);
   const [targetBedtime, setTargetBedtime] = useState(currentSettings.targetBedtime);
   const [targetWakeTime, setTargetWakeTime] = useState(currentSettings.targetWakeTime);
-  const [autoArchiveDays, setAutoArchiveDays] = useState(
-    currentSettings.autoArchiveTasksAfterDays || 30
-  );
+  const [autoArchiveDays, setAutoArchiveDays] = useState<number | string>(currentSettings.autoArchiveTasksAfterDays || 30);
   const [defaultProvider, setDefaultProvider] = useState(
     currentSettings.defaultLLMProvider || 'groq'
   );
@@ -503,10 +501,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 min="4"
                 max="12"
                 value={sleepTargetHours}
+                onFocus={(e) => e.target.select()}
                 onChange={(e) => {
-                  const val = parseFloat(e.target.value) || 8.0;
-                  setSleepTargetHours(val);
-                  persistSettings({ sleepTargetHours: val });
+                  setSleepTargetHours(e.target.value);
+                  const val = parseFloat(e.target.value);
+                  if (!isNaN(val) && val >= 1) {
+                    persistSettings({ sleepTargetHours: val });
+                  }
+                }}
+                onBlur={() => {
+                  const val = parseFloat(String(sleepTargetHours));
+                  const fallback = !isNaN(val) && val >= 1 ? val : 8.0;
+                  setSleepTargetHours(fallback);
+                  persistSettings({ sleepTargetHours: fallback });
                 }}
                 className="w-full px-3.5 py-2.5 rounded-xl bg-[#121624] border border-[#20283d] text-xs text-white focus:outline-none focus:border-indigo-500 font-mono"
               />
@@ -563,10 +570,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 min="7"
                 max="365"
                 value={autoArchiveDays}
+                onFocus={(e) => e.target.select()}
                 onChange={(e) => {
-                  const val = parseInt(e.target.value) || 30;
-                  setAutoArchiveDays(val);
-                  persistSettings({ autoArchiveTasksAfterDays: val });
+                  setAutoArchiveDays(e.target.value);
+                  const val = parseInt(e.target.value, 10);
+                  if (!isNaN(val) && val >= 1) {
+                    persistSettings({ autoArchiveTasksAfterDays: val });
+                  }
+                }}
+                onBlur={() => {
+                  const val = parseInt(String(autoArchiveDays), 10);
+                  const fallback = !isNaN(val) && val >= 1 ? val : 30;
+                  setAutoArchiveDays(fallback);
+                  persistSettings({ autoArchiveTasksAfterDays: fallback });
                 }}
                 className="w-full px-3.5 py-2.5 rounded-xl bg-[#121624] border border-[#20283d] text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
               />

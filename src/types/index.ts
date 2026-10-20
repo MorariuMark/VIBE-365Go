@@ -88,6 +88,13 @@ export interface GymSet {
   completed: boolean;
   rpe?: number;
   tags?: string[];
+  weightMapping?: ExerciseWeightMapping;
+}
+
+export interface ExerciseWeightMapping {
+  enabled: boolean;
+  plateWeightKg: number;
+  displayMode: 'weight' | 'plates';
 }
 
 export interface LoggedExercise {
@@ -99,6 +106,7 @@ export interface LoggedExercise {
   sets: GymSet[];
   notes?: string;
   tags?: string[];
+  weightMapping?: ExerciseWeightMapping;
 }
 
 export interface WorkoutDayLog {

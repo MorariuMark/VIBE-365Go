@@ -748,8 +748,40 @@ export default function Home() {
         });
       }
 
+      // Ensure all exercises in saved session exist in library
+      let ensuredMuscleGroups = [...(prev.muscleGroups || [])];
+      if (Array.isArray(workout.exercises)) {
+        workout.exercises.forEach((ex) => {
+          if (!ex || !ex.exerciseName || !ex.muscleGroupId) return;
+          const cleanName = ex.exerciseName.trim();
+          const grpIdx = ensuredMuscleGroups.findIndex((g) => g.id === ex.muscleGroupId);
+          if (grpIdx >= 0) {
+            const grp = ensuredMuscleGroups[grpIdx];
+            const exs = Array.isArray(grp.exercises) ? grp.exercises : [];
+            const exists = exs.some(
+              (e) => e.name.trim().toLowerCase() === cleanName.toLowerCase() || e.id === ex.exerciseId
+            );
+            if (!exists) {
+              ensuredMuscleGroups[grpIdx] = {
+                ...grp,
+                exercises: [
+                  ...exs,
+                  {
+                    id: ex.exerciseId || `ex_${Date.now()}_${cleanName.toLowerCase().replace(/\s+/g, '_')}`,
+                    name: cleanName,
+                    muscleGroupId: ex.muscleGroupId,
+                    isCustom: true,
+                  },
+                ],
+              };
+            }
+          }
+        });
+      }
+
       const next = {
         ...prev,
+        muscleGroups: ensuredMuscleGroups,
         habits: updatedHabits,
         workoutLogs: {
           ...prev.workoutLogs,
@@ -816,22 +848,69 @@ export default function Home() {
     return newGroup;
   };
 
-  const handleAddCustomExercise = (muscleGroupId: string, exerciseName: string) => {
+  const handleAddCustomExercise = (
+    muscleGroupId: string,
+    exerciseName: string,
+    customId?: string
+  ) => {
+    const trimmed = exerciseName.trim();
+    if (!trimmed) return;
+    const newExId =
+      customId || `ex_${Date.now()}_${trimmed.toLowerCase().replace(/\s+/g, '_')}`;
+
     updateData((prev) => {
-      const muscleGroups = prev.muscleGroups.map((g) => {
+      const groups = prev.muscleGroups || [];
+      let matchedGroup = false;
+
+      const updatedGroups = groups.map((g) => {
         if (g.id !== muscleGroupId) return g;
-        const newEx = {
-          id: `ex_${Date.now()}_${exerciseName.toLowerCase().replace(/\s+/g, '_')}`,
-          name: exerciseName,
-          muscleGroupId,
-          isCustom: true,
-        };
+        matchedGroup = true;
+        const currentExs = Array.isArray(g.exercises) ? g.exercises : [];
+        const existingIdx = currentExs.findIndex(
+          (e) => e.name.trim().toLowerCase() === trimmed.toLowerCase()
+        );
+        if (existingIdx >= 0) {
+          return g;
+        }
         return {
           ...g,
-          exercises: [...g.exercises, newEx],
+          exercises: [
+            ...currentExs,
+            {
+              id: newExId,
+              name: trimmed,
+              muscleGroupId,
+              isCustom: true,
+            },
+          ],
         };
       });
-      return { ...prev, muscleGroups };
+
+      if (!matchedGroup) {
+        const newGrp: MuscleGroup = {
+          id: muscleGroupId,
+          name: muscleGroupId.charAt(0).toUpperCase() + muscleGroupId.slice(1),
+          defaultSplit: 'custom',
+          isPermanent: true,
+          exercises: [
+            {
+              id: newExId,
+              name: trimmed,
+              muscleGroupId,
+              isCustom: true,
+            },
+          ],
+        };
+        return {
+          ...prev,
+          muscleGroups: [...updatedGroups, newGrp],
+        };
+      }
+
+      return {
+        ...prev,
+        muscleGroups: updatedGroups,
+      };
     });
   };
 
@@ -1183,8 +1262,8 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-[#07080c] text-slate-100 flex flex-col antialiased selection:bg-emerald-500 selection:text-black">
       {/* Precision Engineered Top Bar */}
-      <header className="sticky top-0 z-40 bg-[#07080c]/90 border-b border-[#1a1f2e] backdrop-blur-xl">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2 sm:gap-4">
+      <header className="sticky top-0 z-40 bg-[#07080c]/95 border-b border-[#1a1f2e] backdrop-blur-xl pt-[max(env(safe-area-inset-top,0px),18px)] sm:pt-0">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 min-h-16 py-2 flex flex-wrap md:flex-nowrap items-center justify-between gap-2 sm:gap-4">
           {/* Mobile Active Section Indicator */}
           <div className="flex md:hidden items-center gap-2 min-w-0">
             <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center flex-shrink-0">

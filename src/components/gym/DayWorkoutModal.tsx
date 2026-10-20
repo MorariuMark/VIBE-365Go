@@ -9,6 +9,7 @@ import {
   GymSet,
   DropSet,
   PhotoMetadata,
+  ExerciseWeightMapping,
 } from '@/types';
 import { formatDatePretty } from '@/lib/utils';
 import { compressAndDownscaleImage } from '@/lib/imageCompressor';
@@ -66,7 +67,7 @@ interface DayWorkoutModalProps {
     split: 'push' | 'pull' | 'legs' | 'custom',
     isPermanent: boolean
   ) => MuscleGroup;
-  onAddCustomExercise: (muscleGroupId: string, exerciseName: string) => void;
+  onAddCustomExercise: (muscleGroupId: string, exerciseName: string, customId?: string) => void;
   onEditCustomExercise?: (muscleGroupId: string, exerciseId: string, newName: string) => void;
   previousWeightKg?: number;
   fitnessPhotos?: Record<string, PhotoMetadata[]>;
@@ -119,6 +120,33 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
   );
   const [completed, setCompleted] = useState<boolean>(workout?.completed || false);
   const [lastAutoSavedAt, setLastAutoSavedAt] = useState<string | null>(null);
+
+  // Body scroll lock to fix unscrollable modal bug on iOS / mobile
+  useEffect(() => {
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, []);
+
+  // Exercise settings & plate weight mapping state
+  const [activeSettingsExerciseId, setActiveSettingsExerciseId] = useState<string | null>(null);
+
+  const handleUpdateExerciseWeightMapping = (
+    exerciseId: string,
+    mapping: ExerciseWeightMapping
+  ) => {
+    const nextExercises = exercises.map((ex) => {
+      if (ex.id !== exerciseId) return ex;
+      return {
+        ...ex,
+        weightMapping: mapping,
+      };
+    });
+    setExercises(nextExercises);
+    debouncedPersist({ exercises: nextExercises });
+  };
 
   // Set Selection & Quick-View History State
   interface SelectedSetTarget {
@@ -544,15 +572,17 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
 
   // Sticky exercise creation: adds to permanent library of that muscle group
   const handleCreateStickyExercise = (muscleGroupId: string) => {
-    if (!newExerciseName.trim()) return;
-    onAddCustomExercise(muscleGroupId, newExerciseName.trim());
+    const trimmed = newExerciseName.trim();
+    if (!trimmed) return;
+    const newExId = `ex_${Date.now()}_${trimmed.toLowerCase().replace(/\s+/g, '_')}`;
+    onAddCustomExercise(muscleGroupId, trimmed, newExId);
 
     // Also add to today's workout directly
     const targetGroup = muscleGroups.find((g) => g.id === muscleGroupId);
     handleAddExerciseToWorkout(
       muscleGroupId,
-      `ex_${Date.now()}`,
-      newExerciseName.trim(),
+      newExId,
+      trimmed,
       targetGroup?.name || 'Muscle Group'
     );
 
@@ -750,8 +780,8 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
       : null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto">
-      <div className="bg-[#0b0e17] border border-[#1e2436] w-full max-w-4xl rounded-2xl shadow-2xl my-auto overflow-hidden flex flex-col max-h-[94vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-md overflow-hidden pt-[max(env(safe-area-inset-top,0px),12px)] pb-[max(env(safe-area-inset-bottom,0px),12px)]">
+      <div className="bg-[#0b0e17] border border-[#1e2436] w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden flex flex-col h-[90dvh] max-h-[92dvh]">
         {/* Top Sticky Header */}
         <div className="p-4 sm:p-6 border-b border-[#1b2133] bg-[#0d101a]/95 sticky top-0 z-20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex-1 w-full sm:w-auto">
@@ -841,7 +871,7 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
         </div>
 
         {/* Scrollable Content Body */}
-        <div className="p-4 sm:p-6 overflow-y-auto space-y-6 flex-1">
+        <div className="p-3 sm:p-6 overflow-y-auto space-y-6 flex-1 min-h-0 overscroll-contain touch-pan-y" style={{ WebkitOverflowScrolling: 'touch' }}>
           {/* Split Type Selector */}
           <div>
             <label className="block text-[10px] font-mono uppercase tracking-wider text-slate-400 mb-2">
@@ -1276,7 +1306,7 @@ export const DayWorkoutModal: React.FC<DayWorkoutModalProps> = ({
                           {/* Desktop Header */}
                           <div className="hidden sm:grid grid-cols-12 text-[10px] font-mono text-slate-400 uppercase tracking-wider px-2">
                             <span className="col-span-1">Set</span>
-                            <span className="col-span-3">Weight (kg)</span>
+                            <span className="col-span-3">{loggedEx.weightMapping?.enabled ? (loggedEx.weightMapping.displayMode === 'plates' ? `Plates (${loggedEx.weightMapping.plateWeightKg}kg/pl)` : `Weight (${loggedEx.weightMapping.plateWeightKg}kg plates)`) : 'Weight (kg)'}</span>
                             <span className="col-span-2">Reps</span>
                             <span className="col-span-4">Drop Set (Optional)</span>
                             <span className="col-span-2 text-right">Done</span>
